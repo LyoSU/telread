@@ -1,4 +1,5 @@
 import { createSignal, Show, Match, Switch, For, onCleanup, onMount, createMemo, createEffect } from 'solid-js'
+import { Portal } from 'solid-js/web'
 import { Motion } from 'solid-motionone'
 import { DEFAULT_ASPECT_RATIO } from '@/config/constants'
 import type { MessageMedia } from '@/lib/telegram'
@@ -359,14 +360,16 @@ export function PostMedia(props: PostMediaProps) {
         </Match>
       </Switch>
 
-      {/* Fullscreen modal - only for photos now */}
+      {/* Fullscreen modal - rendered in Portal to avoid event propagation issues */}
       <Show when={isExpanded()}>
-        <MediaModal
-          channelId={props.channelId}
-          messageId={props.messageId}
-          media={props.media}
-          onClose={() => setIsExpanded(false)}
-        />
+        <Portal>
+          <MediaModal
+            channelId={props.channelId}
+            messageId={props.messageId}
+            media={props.media}
+            onClose={() => setIsExpanded(false)}
+          />
+        </Portal>
       </Show>
     </div>
   )

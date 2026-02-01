@@ -1,4 +1,5 @@
 import { For, Show, createSignal, onCleanup, onMount } from 'solid-js'
+import { Portal } from 'solid-js/web'
 import { Motion } from 'solid-motionone'
 import { useMedia } from '@/lib/query'
 import { Play, X, ChevronLeft, ChevronRight } from 'lucide-solid'
@@ -36,13 +37,15 @@ export function MediaGallery(props: MediaGalleryProps) {
         </For>
       </div>
 
-      {/* Fullscreen modal */}
+      {/* Fullscreen modal - rendered in Portal to avoid event propagation issues */}
       <Show when={expandedIndex() !== null}>
-        <GalleryModal
-          items={props.items}
-          initialIndex={expandedIndex()!}
-          onClose={() => setExpandedIndex(null)}
-        />
+        <Portal>
+          <GalleryModal
+            items={props.items}
+            initialIndex={expandedIndex()!}
+            onClose={() => setExpandedIndex(null)}
+          />
+        </Portal>
       </Show>
     </div>
   )
