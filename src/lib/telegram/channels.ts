@@ -114,11 +114,16 @@ export async function fetchChannels(): Promise<Channel[]> {
  * group using getMessageGroup API.
  *
  * PERFORMANCE: 1 API call for dialogs + 1 call per album group
+ *
+ * @param options.hideArchived - Whether to exclude archived channels (default: true)
  */
-export async function fetchChannelsWithLastMessages(): Promise<ChannelsWithPostsResult> {
+export async function fetchChannelsWithLastMessages(options?: {
+  hideArchived?: boolean
+}): Promise<ChannelsWithPostsResult> {
+  const { hideArchived = true } = options ?? {}
   const startTime = performance.now()
   if (import.meta.env.DEV) {
-    console.log('[Channels] Starting fetchChannelsWithLastMessages...')
+    console.log('[Channels] Starting fetchChannelsWithLastMessages...', { hideArchived })
   }
 
   const client = getTelegramClient()
@@ -126,7 +131,8 @@ export async function fetchChannelsWithLastMessages(): Promise<ChannelsWithPosts
   // Track messages that are part of groups - we'll fetch complete groups later
   const groupedMessages: Array<{ channelId: number; messageId: number; groupedId: bigint }> = []
 
-  const iterator = client.iterDialogs()[Symbol.asyncIterator]()
+  // Use 'exclude' (default) to hide archived, 'keep' to include them
+  const iterator = client.iterDialogs({ archived: hideArchived ? 'exclude' : 'keep' })[Symbol.asyncIterator]()
   let dialogCount = 0
   let lastLogTime = startTime
 

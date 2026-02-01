@@ -1,9 +1,9 @@
 import { Show, createSignal } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
 import { GlassCard, GlassButton, UserAvatar, ConfirmDialog } from '@/components/ui'
-import { themeStore, authStore, updateStore, type Theme } from '@/lib/store'
+import { themeStore, authStore, updateStore, preferencesStore, type Theme } from '@/lib/store'
 import { logout } from '@/lib/telegram'
-import { Send, ChevronRight, RefreshCw, Check } from 'lucide-solid'
+import { Send, ChevronRight, RefreshCw, Check, FolderOpen, Archive } from 'lucide-solid'
 
 /**
  * Settings page
@@ -84,6 +84,89 @@ function Settings() {
           confirmText="Log Out"
           variant="danger"
         />
+      </div>
+
+      {/* Feed section */}
+      <div>
+        <GlassCard class="p-4">
+          <h2 class="text-sm font-semibold text-tertiary uppercase tracking-wide mb-4">
+            Feed
+          </h2>
+
+          <div class="space-y-4">
+            {/* Folders toggle */}
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-3 flex-1 min-w-0">
+                <div class="w-9 h-9 rounded-xl bg-[var(--accent)]/15 flex items-center justify-center flex-shrink-0">
+                  <FolderOpen size={18} class="text-accent" />
+                </div>
+                <div class="min-w-0">
+                  <p class="text-sm font-medium text-primary">Show Folders</p>
+                  <p class="text-xs text-tertiary">Filter feed by Telegram folders</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={preferencesStore.preferences.showFolders}
+                onClick={() => preferencesStore.setPreference('showFolders', !preferencesStore.preferences.showFolders)}
+                class={`
+                  relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full 
+                  border-2 border-transparent transition-colors duration-200 ease-in-out
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+                  ${preferencesStore.preferences.showFolders 
+                    ? 'bg-[var(--accent)]' 
+                    : 'bg-[var(--color-text-tertiary)]/30'
+                  }
+                `}
+              >
+                <span
+                  class={`
+                    pointer-events-none inline-block h-5 w-5 transform rounded-full 
+                    bg-white shadow-lg ring-0 transition duration-200 ease-in-out
+                    ${preferencesStore.preferences.showFolders ? 'translate-x-5' : 'translate-x-0'}
+                  `}
+                />
+              </button>
+            </div>
+
+            {/* Hide archived toggle */}
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-3 flex-1 min-w-0">
+                <div class="w-9 h-9 rounded-xl bg-[var(--warning)]/15 flex items-center justify-center flex-shrink-0">
+                  <Archive size={18} class="text-[var(--warning)]" />
+                </div>
+                <div class="min-w-0">
+                  <p class="text-sm font-medium text-primary">Hide Archived</p>
+                  <p class="text-xs text-tertiary">Don't show archived channels</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={preferencesStore.preferences.hideArchived}
+                onClick={() => preferencesStore.setPreference('hideArchived', !preferencesStore.preferences.hideArchived)}
+                class={`
+                  relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full 
+                  border-2 border-transparent transition-colors duration-200 ease-in-out
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
+                  ${preferencesStore.preferences.hideArchived 
+                    ? 'bg-[var(--accent)]' 
+                    : 'bg-[var(--color-text-tertiary)]/30'
+                  }
+                `}
+              >
+                <span
+                  class={`
+                    pointer-events-none inline-block h-5 w-5 transform rounded-full 
+                    bg-white shadow-lg ring-0 transition duration-200 ease-in-out
+                    ${preferencesStore.preferences.hideArchived ? 'translate-x-5' : 'translate-x-0'}
+                  `}
+                />
+              </button>
+            </div>
+          </div>
+        </GlassCard>
       </div>
 
       {/* Appearance section */}

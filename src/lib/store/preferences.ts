@@ -6,6 +6,8 @@ export interface Preferences {
   showPreviews: boolean
   autoplayVideos: boolean
   compactMode: boolean
+  showFolders: boolean
+  hideArchived: boolean
 
   // Comment settings
   defaultExpandComments: boolean
@@ -19,6 +21,8 @@ const DEFAULT_PREFERENCES: Preferences = {
   showPreviews: true,
   autoplayVideos: false,
   compactMode: false,
+  showFolders: false,
+  hideArchived: true,
   defaultExpandComments: false,
   showCommentPreviews: 3,
   notificationsEnabled: false,

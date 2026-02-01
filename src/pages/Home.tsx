@@ -3,7 +3,7 @@ import { Timeline } from '@/components/timeline'
 import { useOptimizedTimeline } from '@/lib/query'
 import { useFolderInfoList } from '@/lib/query'
 import { FolderChip } from '@/components/ui'
-import { folderStore, setSelectedFolder, channelsState, hasChannel, upsertChannel, upsertPosts } from '@/lib/store'
+import { folderStore, setSelectedFolder, channelsState, hasChannel, upsertChannel, upsertPosts, preferencesStore } from '@/lib/store'
 import { getChannelIdsInFolder, type FolderInfo, getChannel as fetchChannelApi, fetchMessages } from '@/lib/telegram'
 
 /**
@@ -87,6 +87,17 @@ function Home() {
     // Cleanup abort controller on unmount
     onCleanup(() => {
         folderSyncAbortController?.abort()
+    })
+
+    // Reset folder selection when folders are disabled
+    createEffect(() => {
+        const showFolders = preferencesStore.preferences.showFolders
+        if (!showFolders && folderStore.selectedFolderId !== null) {
+            setSelectedFolder(null, [])
+            if (import.meta.env.DEV) {
+                console.log('[Home] Folders disabled, resetting to All')
+            }
+        }
     })
 
     // Debug logging for folder state changes
@@ -206,8 +217,8 @@ function Home() {
                     <h1 class="text-[15px] font-semibold text-primary">Feed</h1>
                 </div>
 
-                {/* Folder chips - show if we have cached folders */}
-                <Show when={foldersEverLoaded() && (cachedFolders()?.length ?? 0) > 0}>
+                {/* Folder chips - show if enabled in settings and we have folders */}
+                <Show when={preferencesStore.preferences.showFolders && foldersEverLoaded() && (cachedFolders()?.length ?? 0) > 0}>
                     <div class="folder-chips-wrapper pb-3">
                         <div class="folder-chips-container">
                             {/* "All" chip */}

@@ -20,6 +20,7 @@ import {
   createChannelMap,
   restoreChannelsFromCache,
   folderStore,
+  preferencesStore,
   startActivityTracking,
   getLastActiveDescription,
 } from '@/lib/store'
@@ -240,37 +241,41 @@ export function addPostsToCache(posts: Message[]): void {
   queuePostsForPersistence(posts)
 
   // Update channels' lastMessage in timeline data (immediate)
-  queryClient.setQueryData<TimelineData>(queryKeys.timeline.all, (old) => {
-    if (!old) return old
+  // Use setQueriesData to update ALL timeline queries regardless of hideArchived setting
+  queryClient.setQueriesData<TimelineData>(
+    { queryKey: queryKeys.timeline.all },
+    (old) => {
+      if (!old) return old
 
-    // Build a map of newest post per channel
-    const newestByChannel = new Map<number, Message>()
-    for (const post of posts) {
-      const existing = newestByChannel.get(post.channelId)
-      if (!existing || getTime(post.date) > getTime(existing.date)) {
-        newestByChannel.set(post.channelId, post)
+      // Build a map of newest post per channel
+      const newestByChannel = new Map<number, Message>()
+      for (const post of posts) {
+        const existing = newestByChannel.get(post.channelId)
+        if (!existing || getTime(post.date) > getTime(existing.date)) {
+          newestByChannel.set(post.channelId, post)
+        }
       }
+
+      let hasChange = false
+      const newChannels = old.channels.map((channel) => {
+        const newestPost = newestByChannel.get(channel.id)
+        if (!newestPost) return channel
+
+        const postTime = getTime(newestPost.editDate ?? newestPost.date)
+        const currentTime = channel.lastMessage
+          ? getTime(channel.lastMessage.editDate ?? channel.lastMessage.date)
+          : 0
+
+        if (postTime > currentTime) {
+          hasChange = true
+          return { ...channel, lastMessage: newestPost }
+        }
+        return channel
+      })
+
+      return hasChange ? { ...old, channels: newChannels } : old
     }
-
-    let hasChange = false
-    const newChannels = old.channels.map((channel) => {
-      const newestPost = newestByChannel.get(channel.id)
-      if (!newestPost) return channel
-
-      const postTime = getTime(newestPost.editDate ?? newestPost.date)
-      const currentTime = channel.lastMessage
-        ? getTime(channel.lastMessage.editDate ?? channel.lastMessage.date)
-        : 0
-
-      if (postTime > currentTime) {
-        hasChange = true
-        return { ...channel, lastMessage: newestPost }
-      }
-      return channel
-    })
-
-    return hasChange ? { ...old, channels: newChannels } : old
-  })
+  )
 }
 
 /**
@@ -281,27 +286,31 @@ export function removePostsFromCache(channelId: number, messageIds: number[]): v
   removePostsFromPersistentCache(channelId, messageIds)
 
   // Update timeline data
-  queryClient.setQueryData<TimelineData>(queryKeys.timeline.all, (old) => {
-    if (!old) return old
+  // Use setQueriesData to update ALL timeline queries regardless of hideArchived setting
+  queryClient.setQueriesData<TimelineData>(
+    { queryKey: queryKeys.timeline.all },
+    (old) => {
+      if (!old) return old
 
-    const idsSet = new Set(messageIds)
+      const idsSet = new Set(messageIds)
 
-    // Clear channel.lastMessage if it was deleted
-    let hasChange = false
-    const newChannels = old.channels.map((channel) => {
-      if (channel.id !== channelId) return channel
-      if (!channel.lastMessage) return channel
+      // Clear channel.lastMessage if it was deleted
+      let hasChange = false
+      const newChannels = old.channels.map((channel) => {
+        if (channel.id !== channelId) return channel
+        if (!channel.lastMessage) return channel
 
-      if (idsSet.has(channel.lastMessage.id)) {
-        hasChange = true
-        // Set to undefined - we don't have a replacement readily available
-        return { ...channel, lastMessage: undefined }
-      }
-      return channel
-    })
+        if (idsSet.has(channel.lastMessage.id)) {
+          hasChange = true
+          // Set to undefined - we don't have a replacement readily available
+          return { ...channel, lastMessage: undefined }
+        }
+        return channel
+      })
 
-    return hasChange ? { ...old, channels: newChannels } : old
-  })
+      return hasChange ? { ...old, channels: newChannels } : old
+    }
+  )
 }
 
 /**
@@ -310,11 +319,12 @@ export function removePostsFromCache(channelId: number, messageIds: number[]): v
  */
 async function fetchInitialTimeline(): Promise<TimelineData> {
   const startTime = performance.now()
+  const hideArchived = preferencesStore.preferences.hideArchived
   if (import.meta.env.DEV) {
-    console.log('[Timeline] fetchInitialTimeline starting...')
+    console.log('[Timeline] fetchInitialTimeline starting...', { hideArchived })
   }
 
-  const { channels, groupedPosts } = await fetchChannelsWithLastMessages()
+  const { channels, groupedPosts } = await fetchChannelsWithLastMessages({ hideArchived })
 
   if (import.meta.env.DEV) {
     const postCount = channels.filter((c) => c.lastMessage).length
@@ -422,8 +432,9 @@ export function useOptimizedTimeline() {
 
   // Initial data query - fetches channels and populates posts store
   // Long staleTime because channels rarely change - real-time updates handle new posts
+  // Include hideArchived in key so query refetches when setting changes
   const initialQuery = createQuery(() => ({
-    queryKey: queryKeys.timeline.all,
+    queryKey: [...queryKeys.timeline.all, { hideArchived: preferencesStore.preferences.hideArchived }],
     queryFn: fetchInitialTimeline,
     staleTime: 1000 * 60 * 30, // 30 min - channels list rarely changes
     gcTime: 1000 * 60 * 60, // 1 hour in memory
