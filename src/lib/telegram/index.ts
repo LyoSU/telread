@@ -27,6 +27,7 @@ export {
 export {
   fetchChannels,
   fetchChannelsWithLastMessages,
+  fetchArchivedChannelIds,
   getChannel,
   getChannelFullInfo,
   joinChannel,

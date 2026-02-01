@@ -40,6 +40,8 @@ export const queryKeys = {
     syncedPosts: ['timeline', 'syncedPosts'] as const,
     /** Dynamically discovered channels that should persist */
     syncedChannels: ['timeline', 'syncedChannels'] as const,
+    /** Archived channel IDs for filtering (persisted) */
+    archivedChannelIds: ['timeline', 'archivedChannelIds'] as const,
   },
 
   // Comments

@@ -15,8 +15,10 @@ import {
   updatePostReactions,
   isStoreReady,
   getPost,
-  hasChannel,
+  getChannel,
   upsertChannel,
+  addArchivedChannelId,
+  removeArchivedChannelId,
 } from '@/lib/store'
 import { addPostsToCache, removePostsFromCache } from '@/lib/query/hooks'
 import type { Message as TgMessage, RawUpdateInfo, Chat, tl } from '@mtcute/web'
@@ -110,8 +112,12 @@ function processBatch(): void {
       continue
     }
 
-    // Ensure channel exists in store (dynamic discovery)
-    if (!hasChannel(peer.id)) {
+    // Check if channel exists in store
+    const existingChannel = getChannel(peer.id)
+
+    if (!existingChannel) {
+      // Channel not in store - add it via dynamic discovery
+      // This could be a new subscription, so we should process it
       const channel = mapChatToChannel(chat)
       upsertChannel(channel)
       if (import.meta.env.DEV) {
@@ -362,10 +368,13 @@ export function startUpdatesListener(): UpdatesCleanup {
     }
   }
 
+  /** Telegram channel ID offset for "marked" IDs */
+  const CHANNEL_ID_OFFSET = -1000000000000
+  
   /**
    * Convert raw Telegram channel ID to marked format (-100 prefix)
    */
-  const toMarkedChannelId = (rawId: number): number => -1000000000000 - rawId
+  const toMarkedChannelId = (rawId: number): number => CHANNEL_ID_OFFSET - rawId
 
   /**
    * Handle raw updates for views, reactions, etc.
@@ -380,20 +389,65 @@ export function startUpdatesListener(): UpdatesCleanup {
       if (
         update._ === 'updateDialogFilter' ||
         update._ === 'updateDialogFilters' ||
-        update._ === 'updateDialogFilterOrder'
+        update._ === 'updateDialogFilterOrder' ||
+        update._ === 'updatePinnedDialogs'
       ) {
         if (import.meta.env.DEV) {
-          console.log(`[Updates] Folders changed (${update._}), invalidating cache`)
+          console.log(`[Updates] Folders changed (${update._}), invalidating caches`)
         }
 
-        // 1. Clear internal memory cache
+        // Clear internal memory cache and invalidate queries
         clearFoldersCache()
-
-        // 2. Invalidate Query cache to trigger UI update
-        // We use void promise here as we can't await in a sync handler
-        queryClient.invalidateQueries({ queryKey: queryKeys.folders.all }).catch(e => {
-          console.error('[Updates] Failed to invalidate folders query:', e)
+        Promise.all([
+          queryClient.invalidateQueries({ queryKey: queryKeys.folders.all }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.timeline.all }),
+        ]).catch(e => {
+          console.error('[Updates] Failed to invalidate queries:', e)
         })
+        return
+      }
+
+      // Handle archive/unarchive changes (folder_id 0 = main, 1 = archive)
+      // This is the key update for instant archive status sync
+      if (update._ === 'updateFolderPeers') {
+        // Access folderPeers from the raw update
+        const rawUpdate = update as tl.RawUpdateFolderPeers
+        const folderPeers = rawUpdate.folderPeers
+
+        if (Array.isArray(folderPeers)) {
+          for (const fp of folderPeers) {
+            // Validate folder peer structure
+            if (!fp?.peer || typeof fp.folderId !== 'number') continue
+            
+            // Only care about channels (not users or groups)
+            if (fp.peer._ === 'peerChannel') {
+              const rawId = Number(fp.peer.channelId)
+              
+              // Skip if NaN or invalid
+              if (!Number.isFinite(rawId)) continue
+              
+              const channelId = toMarkedChannelId(rawId)
+              
+              if (fp.folderId === 1) {
+                // Moved to archive
+                addArchivedChannelId(channelId)
+                if (import.meta.env.DEV) {
+                  console.log(`[Updates] Channel ${channelId} archived`)
+                }
+              } else if (fp.folderId === 0) {
+                // Moved to main folder
+                removeArchivedChannelId(channelId)
+                if (import.meta.env.DEV) {
+                  console.log(`[Updates] Channel ${channelId} unarchived`)
+                }
+              }
+            }
+          }
+        }
+
+        // Also invalidate folder caches
+        clearFoldersCache()
+        queryClient.invalidateQueries({ queryKey: queryKeys.folders.all }).catch(() => {})
         return
       }
 

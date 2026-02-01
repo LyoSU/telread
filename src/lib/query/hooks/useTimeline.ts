@@ -3,6 +3,7 @@ import { createEffect, on, createMemo, onCleanup } from 'solid-js'
 import {
   fetchMessages,
   fetchChannelsWithLastMessages,
+  fetchArchivedChannelIds,
   onTimelineLoaded,
   sliceWithCompleteGroups,
   updateOpenChannels,
@@ -19,14 +20,57 @@ import {
   getChannels,
   createChannelMap,
   restoreChannelsFromCache,
+  restoreArchivedIdsFromCache,
   folderStore,
   preferencesStore,
   startActivityTracking,
   getLastActiveDescription,
+  setArchivedChannelIds,
+  isChannelArchived,
 } from '@/lib/store'
 import { getTime, groupPostsByMediaGroup } from '@/lib/utils'
 import { queryKeys } from '../keys'
 import { queryClient } from '../client'
+
+/** Cooldown for archived IDs refresh (5 minutes) */
+const ARCHIVED_REFRESH_COOLDOWN_MS = 5 * 60 * 1000
+let lastArchivedRefreshTime = 0
+
+/**
+ * Refresh archived channel IDs in background
+ * Called on startup and when tab becomes visible
+ * Has cooldown to prevent excessive API calls
+ */
+export function refreshArchivedIds(force = false): Promise<void> {
+  const now = Date.now()
+  
+  // Skip if within cooldown (unless forced)
+  if (!force && now - lastArchivedRefreshTime < ARCHIVED_REFRESH_COOLDOWN_MS) {
+    if (import.meta.env.DEV) {
+      const remaining = Math.round((ARCHIVED_REFRESH_COOLDOWN_MS - (now - lastArchivedRefreshTime)) / 1000)
+      console.log(`[Timeline] Skipping archived refresh (cooldown: ${remaining}s remaining)`)
+    }
+    return Promise.resolve()
+  }
+  
+  lastArchivedRefreshTime = now
+  
+  return fetchArchivedChannelIds()
+    .then((archivedIds) => {
+      // Only update if we got results (don't clear cache on network failure)
+      if (archivedIds.size > 0) {
+        setArchivedChannelIds(archivedIds)
+      } else if (import.meta.env.DEV) {
+        console.log('[Timeline] No archived channels found, keeping existing cache')
+      }
+    })
+    .catch((error: unknown) => {
+      if (import.meta.env.DEV) {
+        console.warn('[Timeline] Failed to fetch archived channel IDs:', error)
+      }
+      // Keep existing cached data on error
+    })
+}
 
 /**
  * Hook to fetch messages from a single channel
@@ -245,7 +289,7 @@ export function addPostsToCache(posts: Message[]): void {
   queryClient.setQueriesData<TimelineData>(
     { queryKey: queryKeys.timeline.all },
     (old) => {
-      if (!old) return old
+      if (!old?.channels) return old
 
       // Build a map of newest post per channel
       const newestByChannel = new Map<number, Message>()
@@ -290,7 +334,7 @@ export function removePostsFromCache(channelId: number, messageIds: number[]): v
   queryClient.setQueriesData<TimelineData>(
     { queryKey: queryKeys.timeline.all },
     (old) => {
-      if (!old) return old
+      if (!old?.channels) return old
 
       const idsSet = new Set(messageIds)
 
@@ -315,20 +359,22 @@ export function removePostsFromCache(channelId: number, messageIds: number[]): v
 
 /**
  * Fetch initial timeline data - channels with their last messages
- * Posts are extracted in the effect (works for both fresh fetch and cache restore)
+ * 
+ * IMPORTANT: Always fetches ALL channels (including archived) with isArchived flag.
+ * Filtering is done at display level based on user preferences.
  */
 async function fetchInitialTimeline(): Promise<TimelineData> {
   const startTime = performance.now()
-  const hideArchived = preferencesStore.preferences.hideArchived
   if (import.meta.env.DEV) {
-    console.log('[Timeline] fetchInitialTimeline starting...', { hideArchived })
+    console.log('[Timeline] fetchInitialTimeline starting...')
   }
 
-  const { channels, groupedPosts } = await fetchChannelsWithLastMessages({ hideArchived })
+  const { channels, groupedPosts } = await fetchChannelsWithLastMessages()
 
   if (import.meta.env.DEV) {
     const postCount = channels.filter((c) => c.lastMessage).length
-    console.log(`[Timeline] fetchInitialTimeline done: ${channels.length} channels, ${postCount} posts, ${groupedPosts.length} grouped posts in ${Math.round(performance.now() - startTime)}ms`)
+    const archivedCount = channels.filter((c) => c.isArchived).length
+    console.log(`[Timeline] fetchInitialTimeline done: ${channels.length} channels (${archivedCount} archived), ${postCount} posts, ${groupedPosts.length} grouped posts in ${Math.round(performance.now() - startTime)}ms`)
   }
 
   return { channels, groupedPosts }
@@ -430,11 +476,11 @@ export function useOptimizedTimeline() {
   // Use global channels store
   const channelMap = createChannelMap()
 
-  // Initial data query - fetches channels and populates posts store
+  // Initial data query - fetches ALL channels (including archived) with isArchived flag
+  // Filtering is done at display level based on hideArchived preference
   // Long staleTime because channels rarely change - real-time updates handle new posts
-  // Include hideArchived in key so query refetches when setting changes
   const initialQuery = createQuery(() => ({
-    queryKey: [...queryKeys.timeline.all, { hideArchived: preferencesStore.preferences.hideArchived }],
+    queryKey: queryKeys.timeline.all,
     queryFn: fetchInitialTimeline,
     staleTime: 1000 * 60 * 30, // 30 min - channels list rarely changes
     gcTime: 1000 * 60 * 60, // 1 hour in memory
@@ -484,6 +530,9 @@ export function useOptimizedTimeline() {
 
         // Restore dynamically discovered channels from persistent cache
         restoreChannelsFromCache()
+        
+        // Restore archived IDs from cache for instant filtering
+        restoreArchivedIdsFromCache()
 
         // Always extract and upsert posts from channels
         // upsertPosts handles duplicates (only updates if newer)
@@ -513,6 +562,11 @@ export function useOptimizedTimeline() {
           // Process messages that arrived before timeline was ready
           onTimelineLoaded()
 
+          // Fetch fresh archived channel IDs in background (uses raw API due to mtcute bug)
+          // Cache was already restored above for instant filtering
+          // Force=true on startup to ensure fresh data
+          refreshArchivedIds(true)
+
           // Open top channels for real-time updates (MTProto requirement)
           // This is critical for receiving consistent updates
           updateOpenChannels(data.channels).catch((error) => {
@@ -536,6 +590,15 @@ export function useOptimizedTimeline() {
   // This is used to determine sync strategy on next app start
   const stopActivityTracking = startActivityTracking()
   onCleanup(stopActivityTracking)
+  
+  // Refresh archived IDs when tab becomes visible (catches changes from other devices)
+  const handleVisibility = () => {
+    if (document.visibilityState === 'visible') {
+      refreshArchivedIds()
+    }
+  }
+  document.addEventListener('visibilitychange', handleVisibility)
+  onCleanup(() => document.removeEventListener('visibilitychange', handleVisibility))
 
   // Populate posts from history pages (from cache or after scroll fetch)
   // Track processed page count to avoid re-processing
@@ -584,28 +647,24 @@ export function useOptimizedTimeline() {
 
   // Reactive timeline from centralized store
   // Tracks both sortedKeys AND individual post changes (for edits, reactions)
-  // FOLDER FILTERING: Only show posts from channels in the selected folder
+  // FILTERING: Only show posts from channels in our store + folder filter
   const timeline = createMemo(() => {
     const keys = postsState.sortedKeys
     let posts = keys.map((key) => postsState.byId[key]).filter(Boolean) as Message[]
 
+    const hideArchived = preferencesStore.preferences.hideArchived
     const folderId = folderStore.selectedFolderId
     const folderChannelIds = folderStore.channelIdsInFolder
+
+    // Filter out posts from archived channels when hideArchived=true
+    if (hideArchived) {
+      posts = posts.filter(post => !isChannelArchived(post.channelId))
+    }
 
     // Filter by folder if one is selected
     if (folderId !== null && folderChannelIds.length > 0) {
       const allowedChannelIds = new Set(folderChannelIds)
-      const beforeFilter = posts.length
       posts = posts.filter(post => allowedChannelIds.has(post.channelId))
-
-      if (import.meta.env.DEV) {
-        console.log(`[Timeline] Folder filter: ${beforeFilter} posts → ${posts.length} posts`)
-        console.log(`[Timeline] Folder ${folderId} has channels:`, Array.from(allowedChannelIds))
-        if (posts.length === 0 && beforeFilter > 0) {
-          const postChannels = new Set(keys.map(k => postsState.byId[k]?.channelId).filter(Boolean))
-          console.log(`[Timeline] Available post channels:`, Array.from(postChannels))
-        }
-      }
     }
 
     // Group posts by groupedId for albums
@@ -613,11 +672,18 @@ export function useOptimizedTimeline() {
   })
 
   // Pending count - grouped by media group for accurate count
-  // FOLDER FILTERING: Only count pending posts from channels in the selected folder
+  // FILTERING: Only count posts from channels in our store + folder filter
   const pendingCount = createMemo(() => {
     const keys = postsState.pendingKeys
     if (keys.length === 0) return 0
     let posts = keys.map((key) => postsState.byId[key]).filter(Boolean) as Message[]
+
+    const hideArchived = preferencesStore.preferences.hideArchived
+
+    // Filter out posts from archived channels when hideArchived=true
+    if (hideArchived) {
+      posts = posts.filter(post => !isChannelArchived(post.channelId))
+    }
 
     // Filter by folder if one is selected
     if (folderStore.selectedFolderId !== null && folderStore.channelIdsInFolder.length > 0) {
@@ -628,13 +694,18 @@ export function useOptimizedTimeline() {
     return groupPostsByMediaGroup(posts).length
   })
 
-  // Filtered channels based on selected folder
+  // Filtered channels based on selected folder and hideArchived preference
   const filteredChannels = createMemo(() => {
-    const allChannels = getChannels()
+    let channels = getChannels()
 
-    // If no folder selected, return all channels
+    // Filter out archived channels when hideArchived=true
+    if (preferencesStore.preferences.hideArchived) {
+      channels = channels.filter(channel => !isChannelArchived(channel.id))
+    }
+
+    // If no folder selected, return all (non-archived) channels
     if (folderStore.selectedFolderId === null) {
-      return allChannels
+      return channels
     }
 
     // Filter channels by folder
@@ -643,7 +714,7 @@ export function useOptimizedTimeline() {
     }
 
     const allowedChannelIds = new Set(folderStore.channelIdsInFolder)
-    return allChannels.filter(channel => allowedChannelIds.has(channel.id))
+    return channels.filter(channel => allowedChannelIds.has(channel.id))
   })
 
   return {

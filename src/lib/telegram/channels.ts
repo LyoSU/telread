@@ -1,8 +1,12 @@
 import { getTelegramClient, waitForClientReady } from './client'
 import { mapMessage } from './messages'
 import { MAX_DIALOGS_TO_ITERATE } from '@/config/constants'
-import type { Chat, Message as TgMessage } from '@mtcute/web'
+import Long from 'long'
+import type { Chat, Message as TgMessage, tl } from '@mtcute/web'
 import type { Message } from './messages'
+
+/** Telegram channel ID offset for "marked" IDs */
+const CHANNEL_ID_OFFSET = -1000000000000
 
 export interface Channel {
   id: number
@@ -13,6 +17,8 @@ export interface Channel {
   participantsCount?: number
   description?: string
   linkedChatId?: number
+  /** Whether this channel is in the archived folder */
+  isArchived?: boolean
 }
 
 /**
@@ -56,6 +62,7 @@ export interface ChannelWithLastMessage extends Channel {
  * Includes additional posts from media groups (albums)
  */
 export interface ChannelsWithPostsResult {
+  /** All channels (including archived) - store all for proper tracking */
   channels: ChannelWithLastMessage[]
   /** Additional posts from media groups - needed to display complete albums */
   groupedPosts: Message[]
@@ -113,17 +120,15 @@ export async function fetchChannels(): Promise<Channel[]> {
  * For messages that are part of a media group (album), fetches the complete
  * group using getMessageGroup API.
  *
- * PERFORMANCE: 1 API call for dialogs + 1 call per album group
+ * IMPORTANT: Only fetches channels from main folder (folderId=0).
+ * Archived channels are excluded entirely - updates from them will be ignored.
  *
- * @param options.hideArchived - Whether to exclude archived channels (default: true)
+ * PERFORMANCE: 1 API call for dialogs + 1 call per album group
  */
-export async function fetchChannelsWithLastMessages(options?: {
-  hideArchived?: boolean
-}): Promise<ChannelsWithPostsResult> {
-  const { hideArchived = true } = options ?? {}
+export async function fetchChannelsWithLastMessages(): Promise<ChannelsWithPostsResult> {
   const startTime = performance.now()
   if (import.meta.env.DEV) {
-    console.log('[Channels] Starting fetchChannelsWithLastMessages...', { hideArchived })
+    console.log('[Channels] Starting fetchChannelsWithLastMessages...')
   }
 
   const client = getTelegramClient()
@@ -131,10 +136,9 @@ export async function fetchChannelsWithLastMessages(options?: {
   // Track messages that are part of groups - we'll fetch complete groups later
   const groupedMessages: Array<{ channelId: number; messageId: number; groupedId: bigint }> = []
 
-  // Use 'exclude' (default) to hide archived, 'keep' to include them
-  const iterator = client.iterDialogs({ archived: hideArchived ? 'exclude' : 'keep' })[Symbol.asyncIterator]()
+  // Only fetch from main folder (folderId=0), exclude archived
+  const iterator = client.iterDialogs({ archived: 'exclude' })[Symbol.asyncIterator]()
   let dialogCount = 0
-  let lastLogTime = startTime
 
   while (dialogCount < MAX_DIALOGS_TO_ITERATE) {
     try {
@@ -143,22 +147,16 @@ export async function fetchChannelsWithLastMessages(options?: {
 
       dialogCount++
 
-      // Log progress every 100 dialogs or every 2 seconds
-      if (import.meta.env.DEV && (dialogCount % 100 === 0 || performance.now() - lastLogTime > 2000)) {
-        console.log(`[Channels] Processed ${dialogCount} dialogs, found ${channels.length} channels (${Math.round(performance.now() - startTime)}ms)`)
-        lastLogTime = performance.now()
-      }
-
       const peer = dialog.peer
 
       // Skip users and secret chats
       if (peer.type !== 'chat') continue
       const chat = peer as Chat
+      
       if (chat.chatType === 'channel' && !isGroupChat(chat)) {
         const channel = mapChatToChannel(chat)
 
-        // Extract lastMessage from dialog - KEY OPTIMIZATION
-        // dialog.lastMessage is a high-level Message object from mtcute
+        // Extract lastMessage from dialog
         const lastMessage = dialog.lastMessage
         let mappedLastMessage: Message | undefined
 
@@ -168,7 +166,7 @@ export async function fetchChannelsWithLastMessages(options?: {
             if (mapped) {
               mappedLastMessage = mapped
               
-              // Track if this message is part of a group (album)
+              // Track album groups
               if (mapped.groupedId) {
                 groupedMessages.push({
                   channelId: channel.id,
@@ -197,7 +195,7 @@ export async function fetchChannelsWithLastMessages(options?: {
   }
 
   if (import.meta.env.DEV) {
-    console.log(`[Channels] Done! ${dialogCount} dialogs → ${channels.length} channels in ${Math.round(performance.now() - startTime)}ms`)
+    console.log(`[Channels] Done! ${channels.length} channels from ${dialogCount} dialogs in ${Math.round(performance.now() - startTime)}ms`)
   }
 
   // Fetch complete groups for messages that are part of albums
@@ -210,7 +208,7 @@ export async function fetchChannelsWithLastMessages(options?: {
 
     // Collect existing IDs to avoid duplicates
     const existingIds = new Set(
-      channels.map((c) => c.lastMessage ? `${c.lastMessage.channelId}:${c.lastMessage.id}` : null).filter(Boolean)
+      channels.map((c: ChannelWithLastMessage) => c.lastMessage ? `${c.lastMessage.channelId}:${c.lastMessage.id}` : null).filter(Boolean)
     )
 
     // Fetch groups in small batches to avoid FLOOD_WAIT
@@ -431,4 +429,123 @@ export function mapChatToChannel(chat: Chat): Channel {
 function extractInviteHash(link: string): string | null {
   const match = link.match(/(?:t\.me\/\+|joinchat\/)([a-zA-Z0-9_-]+)/)
   return match ? match[1] : null
+}
+
+/** Pagination limit for fetching archived dialogs (max supported by Telegram) */
+const ARCHIVED_FETCH_LIMIT = 500
+
+/**
+ * Fetch all archived channel IDs using raw Telegram API
+ * mtcute's iterDialogs has a bug that misses some archived channels,
+ * so we use the raw API directly with pagination
+ */
+export async function fetchArchivedChannelIds(): Promise<Set<number>> {
+  const archivedIds = new Set<number>()
+  
+  try {
+    const client = getTelegramClient()
+    
+    let offsetDate = 0
+    let offsetId = 0
+    let offsetPeer: tl.TypeInputPeer = { _: 'inputPeerEmpty' }
+    let hasMore = true
+    
+    if (import.meta.env.DEV) {
+      console.log('[Archived] Fetching archived channel IDs via raw API...')
+    }
+    
+    while (hasMore) {
+      const result = await client.call({
+        _: 'messages.getDialogs',
+        folderId: 1, // Archive folder
+        offsetDate,
+        offsetId,
+        offsetPeer,
+        limit: ARCHIVED_FETCH_LIMIT,
+        hash: Long.ZERO,
+      })
+      
+      // Check if we got valid response with dialogs
+      if (!('dialogs' in result) || result.dialogs.length === 0) {
+        hasMore = false
+        break
+      }
+      
+      // Extract channel IDs from chats
+      if ('chats' in result) {
+        for (const chat of result.chats) {
+          // Only broadcast channels (not groups/supergroups)
+          if (chat._ === 'channel' && !chat.megagroup && !chat.gigagroup) {
+            const markedId = CHANNEL_ID_OFFSET - Number(chat.id)
+            archivedIds.add(markedId)
+          }
+        }
+      }
+      
+      // Check if we got all dialogs (no more pages)
+      if (result._ === 'messages.dialogs' || result.dialogs.length < ARCHIVED_FETCH_LIMIT) {
+        hasMore = false
+      } else if ('messages' in result && result.messages.length > 0) {
+        // Get pagination offset from last message
+        const lastMsg = result.messages[result.messages.length - 1]
+        if (lastMsg._ === 'message' || lastMsg._ === 'messageService') {
+          offsetDate = lastMsg.date
+          offsetId = lastMsg.id
+        }
+        
+        // Get peer from last dialog for offset
+        const lastDialog = result.dialogs[result.dialogs.length - 1]
+        if (lastDialog._ === 'dialog' && 'chats' in result && 'users' in result) {
+          offsetPeer = buildOffsetPeer(lastDialog.peer, result.chats, result.users)
+        }
+      } else {
+        hasMore = false
+      }
+    }
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error('[Archived] Error fetching archived dialogs:', error)
+    }
+    // Return whatever we collected so far (graceful degradation)
+  }
+  
+  if (import.meta.env.DEV) {
+    console.log(`[Archived] Found ${archivedIds.size} archived channels`)
+  }
+  
+  return archivedIds
+}
+
+/**
+ * Build InputPeer for pagination offset from dialog peer
+ */
+function buildOffsetPeer(
+  peer: tl.TypePeer,
+  chats: tl.TypeChat[],
+  users: tl.TypeUser[]
+): tl.TypeInputPeer {
+  if (peer._ === 'peerChannel') {
+    const chat = chats.find(c => c._ === 'channel' && c.id === peer.channelId)
+    if (chat && chat._ === 'channel' && chat.accessHash) {
+      return {
+        _: 'inputPeerChannel',
+        channelId: chat.id,
+        accessHash: Long.isLong(chat.accessHash) ? chat.accessHash : Long.fromValue(chat.accessHash),
+      }
+    }
+  } else if (peer._ === 'peerChat') {
+    return { _: 'inputPeerChat', chatId: peer.chatId }
+  } else if (peer._ === 'peerUser') {
+    const user = users.find(u => u._ === 'user' && u.id === peer.userId)
+    if (user && user._ === 'user' && user.accessHash) {
+      return {
+        _: 'inputPeerUser',
+        userId: user.id,
+        accessHash: Long.isLong(user.accessHash) ? user.accessHash : Long.fromValue(user.accessHash),
+      }
+    }
+  }
+  
+  // Fallback to empty peer (will restart from beginning, but better than crashing)
+  return { _: 'inputPeerEmpty' }
 }

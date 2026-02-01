@@ -1,9 +1,10 @@
 import { Show, createSignal } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
 import { GlassCard, GlassButton, UserAvatar, ConfirmDialog } from '@/components/ui'
-import { themeStore, authStore, updateStore, preferencesStore, type Theme } from '@/lib/store'
+import { themeStore, authStore, updateStore, preferencesStore, clearPosts, type Theme } from '@/lib/store'
 import { logout } from '@/lib/telegram'
-import { Send, ChevronRight, RefreshCw, Check, FolderOpen, Archive } from 'lucide-solid'
+import { queryClient, queryKeys } from '@/lib/query'
+import { Send, ChevronRight, RefreshCw, Check, FolderOpen, Archive, Trash2 } from 'lucide-solid'
 
 /**
  * Settings page
@@ -200,6 +201,66 @@ function Settings() {
                 ))}
               </div>
             </div>
+          </div>
+        </GlassCard>
+      </div>
+
+      {/* Data section */}
+      <div>
+        <GlassCard class="p-4">
+          <h2 class="text-sm font-semibold text-tertiary uppercase tracking-wide mb-4">
+            Data
+          </h2>
+
+          <div class="space-y-3">
+            {/* Refresh channels */}
+            <button
+              onClick={async () => {
+                // Clear all caches and refetch
+                clearPosts()
+                await queryClient.invalidateQueries({ queryKey: queryKeys.timeline.all })
+                await queryClient.invalidateQueries({ queryKey: queryKeys.channels.all })
+                await queryClient.invalidateQueries({ queryKey: queryKeys.folders.all })
+                // Force refetch
+                await queryClient.refetchQueries({ queryKey: queryKeys.timeline.all })
+                window.location.reload()
+              }}
+              class="w-full flex items-center gap-3 p-3 rounded-xl bg-[var(--pill-bg)] hover:bg-[var(--pill-bg-hover)] transition-colors text-left"
+            >
+              <div class="w-9 h-9 rounded-xl bg-[var(--accent)]/15 flex items-center justify-center flex-shrink-0">
+                <RefreshCw size={18} class="text-accent" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-primary">Refresh Channels</p>
+                <p class="text-xs text-tertiary">Reload all channels and archived status</p>
+              </div>
+            </button>
+
+            {/* Clear cache */}
+            <button
+              onClick={async () => {
+                // Delete IndexedDB cache
+                try {
+                  indexedDB.deleteDatabase('REACT_QUERY_OFFLINE_CACHE')
+                } catch (e) {
+                  console.error('Failed to delete IndexedDB:', e)
+                }
+                // Clear query client
+                queryClient.clear()
+                clearPosts()
+                // Reload
+                window.location.reload()
+              }}
+              class="w-full flex items-center gap-3 p-3 rounded-xl bg-[var(--pill-bg)] hover:bg-[var(--pill-bg-hover)] transition-colors text-left"
+            >
+              <div class="w-9 h-9 rounded-xl bg-[var(--error)]/15 flex items-center justify-center flex-shrink-0">
+                <Trash2 size={18} class="text-[var(--error)]" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-primary">Clear Cache</p>
+                <p class="text-xs text-tertiary">Delete all cached data and reload</p>
+              </div>
+            </button>
           </div>
         </GlassCard>
       </div>

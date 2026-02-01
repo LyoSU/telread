@@ -13,13 +13,14 @@
 import { createStore, produce } from 'solid-js/store'
 import { createMemo } from 'solid-js'
 import type { ChannelWithLastMessage } from '@/lib/telegram'
-import { queryClient } from '@/lib/query/client'
-
-// Query key for synced channels (must match queryKeys.timeline.syncedChannels)
-const SYNCED_CHANNELS_KEY = ['timeline', 'syncedChannels'] as const
+import { queryClient, queryKeys } from '@/lib/query'
 
 interface SyncedChannelsData {
   channels: ChannelWithLastMessage[]
+}
+
+interface ArchivedIdsData {
+  ids: number[]
 }
 
 // Re-export for convenience
@@ -28,11 +29,14 @@ export type { ChannelWithLastMessage }
 interface ChannelsState {
   byId: Record<number, ChannelWithLastMessage>
   ids: number[]
+  /** IDs of channels in the Archive folder (for filtering) */
+  archivedIds: Set<number>
 }
 
 const [state, setState] = createStore<ChannelsState>({
   byId: {},
   ids: [],
+  archivedIds: new Set(),
 })
 
 /**
@@ -83,7 +87,7 @@ export function upsertChannel(channel: ChannelWithLastMessage): void {
  * Persist a dynamically discovered channel to IndexedDB cache
  */
 function persistChannelToCache(channel: ChannelWithLastMessage): void {
-  queryClient.setQueryData<SyncedChannelsData>(SYNCED_CHANNELS_KEY, (old) => {
+  queryClient.setQueryData<SyncedChannelsData>(queryKeys.timeline.syncedChannels, (old) => {
     const existing = old?.channels ?? []
 
     // Skip if already cached
@@ -106,26 +110,38 @@ function persistChannelToCache(channel: ChannelWithLastMessage): void {
  * Called on app startup after initial channels are loaded
  */
 export function restoreChannelsFromCache(): void {
-  const data = queryClient.getQueryData<SyncedChannelsData>(SYNCED_CHANNELS_KEY)
-  const cachedChannels = data?.channels ?? []
+  try {
+    const data = queryClient.getQueryData<SyncedChannelsData>(queryKeys.timeline.syncedChannels)
+    const cachedChannels = data?.channels
+    
+    // Validate cached data
+    if (!Array.isArray(cachedChannels) || cachedChannels.length === 0) return
 
-  if (cachedChannels.length === 0) return
+    let restoredCount = 0
 
-  let restoredCount = 0
-
-  setState(produce((s) => {
-    for (const channel of cachedChannels) {
-      // Only add if not already present (from initial load)
-      if (!s.byId[channel.id]) {
-        s.byId[channel.id] = channel
-        s.ids.push(channel.id)
-        restoredCount++
+    setState(produce((s) => {
+      for (const channel of cachedChannels) {
+        // Validate channel structure before using
+        if (!channel || typeof channel.id !== 'number' || !Number.isFinite(channel.id)) {
+          continue
+        }
+        // Only add if not already present (from initial load)
+        if (!s.byId[channel.id]) {
+          s.byId[channel.id] = channel
+          s.ids.push(channel.id)
+          restoredCount++
+        }
       }
-    }
-  }))
+    }))
 
-  if (import.meta.env.DEV && restoredCount > 0) {
-    console.log(`[Channels] Restored ${restoredCount} channels from cache`)
+    if (import.meta.env.DEV && restoredCount > 0) {
+      console.log(`[Channels] Restored ${restoredCount} channels from cache`)
+    }
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error('[Channels] Failed to restore channels from cache:', error)
+    }
+    // Graceful degradation - continue without cached data
   }
 }
 
@@ -170,6 +186,105 @@ export function createChannelMap() {
     }
     return map
   })
+}
+
+/**
+ * Set archived channel IDs (fetched via raw API)
+ * Also persists to IndexedDB for instant startup
+ */
+export function setArchivedChannelIds(ids: Set<number>): void {
+  setState('archivedIds', ids)
+  
+  // Persist to IndexedDB
+  queryClient.setQueryData<ArchivedIdsData>(queryKeys.timeline.archivedChannelIds, {
+    ids: Array.from(ids)
+  })
+  
+  if (import.meta.env.DEV) {
+    console.log(`[Channels] Set ${ids.size} archived channel IDs (persisted)`)
+  }
+}
+
+/**
+ * Add a channel to archived set (when receiving updateFolderPeers)
+ */
+export function addArchivedChannelId(channelId: number): void {
+  if (state.archivedIds.has(channelId)) return
+  
+  const newSet = new Set(state.archivedIds)
+  newSet.add(channelId)
+  setState('archivedIds', newSet)
+  
+  // Update persistent cache
+  queryClient.setQueryData<ArchivedIdsData>(queryKeys.timeline.archivedChannelIds, {
+    ids: Array.from(newSet)
+  })
+  
+  if (import.meta.env.DEV) {
+    console.log(`[Channels] Added ${channelId} to archived`)
+  }
+}
+
+/**
+ * Remove a channel from archived set (when receiving updateFolderPeers)
+ */
+export function removeArchivedChannelId(channelId: number): void {
+  if (!state.archivedIds.has(channelId)) return
+  
+  const newSet = new Set(state.archivedIds)
+  newSet.delete(channelId)
+  setState('archivedIds', newSet)
+  
+  // Update persistent cache
+  queryClient.setQueryData<ArchivedIdsData>(queryKeys.timeline.archivedChannelIds, {
+    ids: Array.from(newSet)
+  })
+  
+  if (import.meta.env.DEV) {
+    console.log(`[Channels] Removed ${channelId} from archived`)
+  }
+}
+
+/**
+ * Restore archived channel IDs from IndexedDB cache
+ * Called on app startup for instant filtering
+ */
+export function restoreArchivedIdsFromCache(): void {
+  try {
+    const data = queryClient.getQueryData<ArchivedIdsData>(queryKeys.timeline.archivedChannelIds)
+    
+    // Validate cached data
+    if (!data?.ids || !Array.isArray(data.ids)) return
+    
+    // Filter to valid numbers only (protection against corrupted cache)
+    const validIds = data.ids.filter(id => typeof id === 'number' && Number.isFinite(id))
+    if (validIds.length === 0) return
+    
+    setState('archivedIds', new Set(validIds))
+    
+    if (import.meta.env.DEV) {
+      console.log(`[Channels] Restored ${validIds.length} archived IDs from cache`)
+    }
+  } catch (error: unknown) {
+    if (import.meta.env.DEV) {
+      console.error('[Channels] Failed to restore archived IDs from cache:', error)
+    }
+    // Graceful degradation - continue without cached data
+  }
+}
+
+/**
+ * Check if a channel is in the Archive folder
+ */
+export function isChannelArchived(channelId: number): boolean {
+  return state.archivedIds.has(channelId)
+}
+
+/**
+ * Get the Set of archived channel IDs
+ */
+export function getArchivedChannelIds(): Set<number> {
+  return state.archivedIds
 }
 
 /**

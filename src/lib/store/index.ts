@@ -31,6 +31,12 @@ export {
   createChannelMap,
   channelsState,
   restoreChannelsFromCache,
+  setArchivedChannelIds,
+  addArchivedChannelId,
+  removeArchivedChannelId,
+  restoreArchivedIdsFromCache,
+  isChannelArchived,
+  getArchivedChannelIds,
   type ChannelWithLastMessage,
 } from './channels'
 export {

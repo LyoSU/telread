@@ -5,6 +5,7 @@ import '@/styles/index.css'
 import App from './App'
 import { cacheReadyPromise } from '@/lib/query/client'
 import { updateStore } from '@/lib/store'
+import { fetchArchivedChannelIds } from '@/lib/telegram/channels'
 
 // Safety net for SolidJS cleanNode errors during navigation
 // These shouldn't occur with proper cleanup, but suppress them just in case
@@ -66,6 +67,8 @@ const updateSW = registerSW({
 declare global {
   interface Window {
     __swUpdate?: (reloadPage?: boolean) => Promise<void>
+    __fetchArchivedIds?: typeof fetchArchivedChannelIds
   }
 }
 window.__swUpdate = updateSW
+window.__fetchArchivedIds = fetchArchivedChannelIds
