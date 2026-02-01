@@ -8,7 +8,6 @@ export interface LightboxItem {
   height: number
   thumb?: string
   alt?: string
-  type?: 'image' | 'video'
 }
 
 export interface LightboxProps {
@@ -19,7 +18,35 @@ export interface LightboxProps {
 }
 
 /**
- * PhotoSwipe-based lightbox for images and videos
+ * PhotoSwipe configuration for the app
+ */
+const PSWP_OPTIONS = {
+  closeOnVerticalDrag: true,
+  showHideAnimationType: 'fade' as const,
+  paddingFn: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+  maxZoomLevel: 4,
+  pinchToClose: true,
+  bgClickAction: 'close' as const,
+  tapAction: 'toggle-controls' as const,
+  doubleTapAction: 'zoom' as const,
+}
+
+/**
+ * Convert LightboxItem to PhotoSwipe data format
+ */
+function toDataSource(items: LightboxItem[]) {
+  return items.map((item) => ({
+    src: item.src,
+    width: item.width || 1200,
+    height: item.height || 800,
+    alt: item.alt || '',
+    msrc: item.thumb || '',
+  }))
+}
+
+/**
+ * PhotoSwipe-based lightbox for images
+ * Features: pinch-to-zoom, swipe navigation, double-tap zoom
  */
 export function Lightbox(props: LightboxProps) {
   let pswp: PhotoSwipe | null = null
@@ -27,60 +54,15 @@ export function Lightbox(props: LightboxProps) {
   const openLightbox = () => {
     if (pswp || !props.open || props.items.length === 0) return
 
-    const dataSource = props.items.map((item) => ({
-      src: item.src,
-      width: item.width || 1200,
-      height: item.height || 800,
-      alt: item.alt || '',
-      msrc: item.thumb || '',
-      type: item.type || 'image',
-    }))
-
     pswp = new PhotoSwipe({
-      dataSource,
+      dataSource: toDataSource(props.items),
       index: props.index,
-      closeOnVerticalDrag: true,
-      showHideAnimationType: 'fade',
-      paddingFn: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-      maxZoomLevel: 4,
-      pinchToClose: true,
-      bgClickAction: 'close',
-      tapAction: 'toggle-controls',
-      doubleTapAction: 'zoom',
+      ...PSWP_OPTIONS,
     })
 
     pswp.on('close', () => {
       pswp = null
       props.onClose()
-    })
-
-    // Video support
-    pswp.on('contentLoad', (e) => {
-      const { content } = e
-      if (content.data.type === 'video' && content.data.src) {
-        e.preventDefault()
-        
-        const video = document.createElement('video')
-        video.src = content.data.src as string
-        video.controls = true
-        video.autoplay = true
-        video.playsInline = true
-        video.style.cssText = 'width: 100%; height: 100%; object-fit: contain; background: #000;'
-        
-        ;(content as any).element = video
-      }
-    })
-
-    pswp.on('contentActivate', ({ content }) => {
-      if (content.data.type === 'video' && content.element instanceof HTMLVideoElement) {
-        content.element.play().catch(() => {})
-      }
-    })
-
-    pswp.on('contentDeactivate', ({ content }) => {
-      if (content.data.type === 'video' && content.element instanceof HTMLVideoElement) {
-        content.element.pause()
-      }
     })
 
     pswp.init()
@@ -105,12 +87,11 @@ export function Lightbox(props: LightboxProps) {
     closeLightbox()
   })
 
-  // No container needed - PhotoSwipe appends to body
   return null
 }
 
 /**
- * Imperative lightbox API
+ * Imperative lightbox API for opening from callbacks
  */
 export function createLightbox() {
   let pswp: PhotoSwipe | null = null
@@ -120,55 +101,10 @@ export function createLightbox() {
       pswp.close()
     }
 
-    const dataSource = items.map((item) => ({
-      src: item.src,
-      width: item.width || 1200,
-      height: item.height || 800,
-      alt: item.alt || '',
-      msrc: item.thumb || '',
-      type: item.type || 'image',
-    }))
-
     pswp = new PhotoSwipe({
-      dataSource,
+      dataSource: toDataSource(items),
       index,
-      closeOnVerticalDrag: true,
-      showHideAnimationType: 'fade',
-      paddingFn: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-      maxZoomLevel: 4,
-      pinchToClose: true,
-      bgClickAction: 'close',
-      tapAction: 'toggle-controls',
-      doubleTapAction: 'zoom',
-    })
-
-    // Video support
-    pswp.on('contentLoad', (e) => {
-      const { content } = e
-      if (content.data.type === 'video' && content.data.src) {
-        e.preventDefault()
-        
-        const video = document.createElement('video')
-        video.src = content.data.src as string
-        video.controls = true
-        video.autoplay = true
-        video.playsInline = true
-        video.style.cssText = 'width: 100%; height: 100%; object-fit: contain; background: #000;'
-        
-        ;(content as any).element = video
-      }
-    })
-
-    pswp.on('contentActivate', ({ content }) => {
-      if (content.data.type === 'video' && content.element instanceof HTMLVideoElement) {
-        content.element.play().catch(() => {})
-      }
-    })
-
-    pswp.on('contentDeactivate', ({ content }) => {
-      if (content.data.type === 'video' && content.element instanceof HTMLVideoElement) {
-        content.element.pause()
-      }
+      ...PSWP_OPTIONS,
     })
 
     pswp.on('close', () => {

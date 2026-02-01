@@ -1,8 +1,8 @@
-import { For, Show, createSignal, createEffect, onCleanup, onMount } from 'solid-js'
+import { For, Show, createSignal, createMemo, onCleanup } from 'solid-js'
 import { Portal } from 'solid-js/web'
 import { useMedia } from '@/lib/query'
-import { createLightbox, type LightboxItem } from '@/components/ui'
-import { Play, X } from 'lucide-solid'
+import { VideoModal, Lightbox, type LightboxItem } from '@/components/ui'
+import { Play } from 'lucide-solid'
 import type { MessageMedia } from '@/lib/telegram'
 
 interface MediaItem {
@@ -18,115 +18,95 @@ interface MediaGalleryProps {
 
 /**
  * Media gallery for albums (grouped posts)
- * Threads-style horizontal scrolling row + PhotoSwipe lightbox for images
+ * Threads-style horizontal scrolling row
+ * Uses PhotoSwipe for photo viewing, VideoModal for videos
  */
 export function MediaGallery(props: MediaGalleryProps) {
   const [expandedIndex, setExpandedIndex] = createSignal<number | null>(null)
-  const [videoModalUrl, setVideoModalUrl] = createSignal<string | null>(null)
-  const [videoModalLoading, setVideoModalLoading] = createSignal(false)
-  const lightbox = createLightbox()
+  const [lightboxOpen, setLightboxOpen] = createSignal(false)
+  const [lightboxIndex, setLightboxIndex] = createSignal(0)
 
-  // Load full resolution URLs for all items when expanded
-  const fullUrls = new Map<number, string>()
+  // Separate photo items for Lightbox navigation
+  const photoItems = createMemo(() => 
+    props.items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.media.type === 'photo')
+  )
+
+  // Map gallery index to lightbox index
+  const galleryToLightboxIndex = createMemo(() => {
+    const map = new Map<number, number>()
+    photoItems().forEach(({ index }, lightboxIdx) => {
+      map.set(index, lightboxIdx)
+    })
+    return map
+  })
+
+  // Derived: expanded item data (for videos only now)
+  const expandedItem = createMemo(() => {
+    const idx = expandedIndex()
+    return idx !== null ? props.items[idx] : null
+  })
   
-  // Create queries for all items - they load lazily
-  const queries = () => props.items.map((item, index) => ({
-    index,
-    query: useMedia(
+  const isExpandedVideo = createMemo(() => {
+    const item = expandedItem()
+    if (!item) return false
+    return item.media.type === 'video' || item.media.type === 'animation'
+  })
+
+  // Load full resolution for expanded video
+  const expandedMediaQuery = useMedia(
+    () => expandedItem()?.channelId ?? 0,
+    () => expandedItem()?.messageId ?? 0,
+    () => undefined,
+    () => expandedIndex() !== null && isExpandedVideo()
+  )
+
+  // Load full resolution for all photos in lightbox
+  const photoMediaQueries = photoItems().map(({ item }) => 
+    useMedia(
       () => item.channelId,
       () => item.messageId,
       () => undefined,
-      () => expandedIndex() !== null
+      lightboxOpen
     )
-  }))
+  )
 
-  // Track loaded URLs and open appropriate viewer
-  createEffect(() => {
-    const idx = expandedIndex()
-    if (idx === null) return
-
-    // Collect all available URLs
-    for (const { index, query } of queries()) {
-      if (query.data) {
-        fullUrls.set(index, query.data)
+  // Build lightbox items from loaded photos
+  const lightboxItems = createMemo((): LightboxItem[] => {
+    return photoItems().map(({ item }, idx) => {
+      const query = photoMediaQueries[idx]
+      return {
+        src: query?.data || item.media.thumb || '',
+        width: item.media.width || 1200,
+        height: item.media.height || 800,
+        thumb: item.media.thumb,
       }
-    }
-
-    const item = props.items[idx]
-    const currentUrl = fullUrls.get(idx)
-    const isVideo = item.media.type === 'video' || item.media.type === 'animation'
-
-    if (currentUrl) {
-      if (isVideo) {
-        // Open video modal
-        setVideoModalUrl(currentUrl)
-        setVideoModalLoading(false)
-      } else {
-        // Open PhotoSwipe for images only
-        openLightbox(idx)
-      }
-    } else if (isVideo) {
-      setVideoModalLoading(true)
-    }
+    })
   })
-
-  const openLightbox = (startIndex: number) => {
-    // Filter to only images for PhotoSwipe
-    const imageItems: { originalIndex: number; item: LightboxItem }[] = []
-    
-    props.items.forEach((item, index) => {
-      const isVideo = item.media.type === 'video' || item.media.type === 'animation'
-      if (!isVideo) {
-        const url = fullUrls.get(index)
-        imageItems.push({
-          originalIndex: index,
-          item: {
-            src: url || item.media.thumb || '',
-            width: item.media.width || 1200,
-            height: item.media.height || 800,
-            thumb: item.media.thumb,
-            type: 'image',
-          }
-        })
-      }
-    })
-
-    if (imageItems.length === 0) return
-
-    // Find the index within images array
-    const imageIndex = imageItems.findIndex(i => i.originalIndex === startIndex)
-    const pswpIndex = imageIndex >= 0 ? imageIndex : 0
-
-    const pswp = lightbox.open(imageItems.map(i => i.item), pswpIndex)
-    
-    pswp?.on('close', () => {
-      setExpandedIndex(null)
-    })
-  }
 
   const handleItemClick = (index: number) => {
     const item = props.items[index]
-    const isVideo = item.media.type === 'video' || item.media.type === 'animation'
     
-    setExpandedIndex(index)
-    
-    // If URL already loaded
-    const url = fullUrls.get(index)
-    if (url) {
-      if (isVideo) {
-        setVideoModalUrl(url)
-      } else {
-        openLightbox(index)
+    if (item.media.type === 'photo') {
+      // Open PhotoSwipe for photos
+      const lbIndex = galleryToLightboxIndex().get(index)
+      if (lbIndex !== undefined) {
+        setLightboxIndex(lbIndex)
+        setLightboxOpen(true)
       }
-    } else if (isVideo) {
-      setVideoModalLoading(true)
+    } else {
+      // Open VideoModal for videos/animations
+      setExpandedIndex(index)
     }
   }
 
   const closeVideoModal = () => {
-    setVideoModalUrl(null)
-    setVideoModalLoading(false)
     setExpandedIndex(null)
+  }
+
+  const closeLightbox = () => {
+    setLightboxOpen(false)
   }
 
   return (
@@ -143,127 +123,24 @@ export function MediaGallery(props: MediaGalleryProps) {
         </For>
       </div>
 
-      {/* Video modal */}
-      <Show when={videoModalUrl() || videoModalLoading()}>
+      {/* PhotoSwipe lightbox for photos */}
+      <Lightbox
+        items={lightboxItems()}
+        index={lightboxIndex()}
+        open={lightboxOpen()}
+        onClose={closeLightbox}
+      />
+
+      {/* VideoModal for videos */}
+      <Show when={expandedIndex() !== null && isExpandedVideo()}>
         <Portal>
           <VideoModal
-            url={videoModalUrl()}
-            isLoading={videoModalLoading()}
+            url={expandedMediaQuery.data}
+            isLoading={expandedMediaQuery.isLoading}
             onClose={closeVideoModal}
           />
         </Portal>
       </Show>
-    </div>
-  )
-}
-
-/**
- * Simple video modal for gallery videos
- */
-function VideoModal(props: {
-  url: string | null
-  isLoading: boolean
-  onClose: () => void
-}) {
-  let closedByBack = false
-  let touchStartY = 0
-  const [offsetY, setOffsetY] = createSignal(0)
-
-  const handleTouchStart = (e: TouchEvent) => {
-    touchStartY = e.touches[0].clientY
-  }
-
-  const handleTouchMove = (e: TouchEvent) => {
-    const deltaY = e.touches[0].clientY - touchStartY
-    if (deltaY > 0) setOffsetY(deltaY)
-  }
-
-  const handleTouchEnd = () => {
-    if (offsetY() > 100) {
-      close()
-    } else {
-      setOffsetY(0)
-    }
-  }
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      close()
-    }
-  }
-
-  const handlePopState = () => {
-    closedByBack = true
-    props.onClose()
-  }
-
-  const close = () => {
-    if (!closedByBack) history.back()
-    props.onClose()
-  }
-
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown)
-    document.body.style.overflow = 'hidden'
-    history.pushState({ modal: 'video' }, '')
-    window.addEventListener('popstate', handlePopState)
-  })
-
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown)
-    window.removeEventListener('popstate', handlePopState)
-    document.body.style.overflow = ''
-  })
-
-  const opacity = () => Math.max(0, 1 - offsetY() / 300)
-
-  return (
-    <div
-      class="fixed inset-0 z-[9999] flex items-center justify-center"
-      style={{ 'background-color': `rgba(0, 0, 0, ${opacity()})` }}
-      onClick={close}
-    >
-      <button
-        type="button"
-        aria-label="Close"
-        class="absolute top-4 right-4 p-2 text-white/70 hover:text-white z-20 transition-colors"
-        style={{ 'padding-top': 'env(safe-area-inset-top, 0)' }}
-        onClick={close}
-      >
-        <X size={32} />
-      </button>
-
-      <div
-        class="w-full h-full flex items-center justify-center p-4"
-        style={{
-          transform: `translateY(${offsetY()}px)`,
-          transition: offsetY() === 0 ? 'transform 0.2s ease-out' : 'none',
-        }}
-        onClick={(e) => e.stopPropagation()}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        <Show
-          when={props.url}
-          fallback={
-            <Show when={props.isLoading}>
-              <div class="animate-spin w-10 h-10 border-2 border-white border-t-transparent rounded-full" />
-            </Show>
-          }
-        >
-          {(url) => (
-            <video
-              src={url()}
-              class="max-w-full max-h-full"
-              controls
-              autoplay
-              playsinline
-            />
-          )}
-        </Show>
-      </div>
     </div>
   )
 }
@@ -280,6 +157,7 @@ function GalleryItem(props: {
 
   const isAnimation = () => props.item.media.type === 'animation'
 
+  // Load large thumbnail for inline display
   const mediaQuery = useMedia(
     () => props.item.channelId,
     () => props.item.messageId,
