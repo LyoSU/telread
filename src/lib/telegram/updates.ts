@@ -17,7 +17,7 @@ import {
   upsertChannel,
 } from '@/lib/store'
 import { addPostsToCache, removePostsFromCache } from '@/lib/query/hooks'
-import type { Message as TgMessage, RawUpdateInfo, Chat } from '@mtcute/web'
+import type { Message as TgMessage, RawUpdateInfo, Chat, tl } from '@mtcute/web'
 
 export type UpdatesCleanup = () => void
 
@@ -370,7 +370,7 @@ export function startUpdatesListener(): UpdatesCleanup {
     if (getClientVersion() !== listenerClientVersion) return
 
     try {
-      const update = info.update as any
+      const update = info.update as tl.TypeUpdate
 
       // Handle view count updates
       if (update._ === 'updateChannelMessageViews') {
@@ -396,7 +396,7 @@ export function startUpdatesListener(): UpdatesCleanup {
           )
 
           const reactions: MessageReaction[] = []
-          for (const r of update.reactions.results as any[]) {
+          for (const r of update.reactions.results) {
             if (r.count <= 0) continue
             // Skip paid reactions (stars)
             if (r.reaction?._ === 'reactionPaid') continue

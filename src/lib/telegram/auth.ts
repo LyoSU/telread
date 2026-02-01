@@ -62,22 +62,13 @@ export async function submitCode(
   const client = getTelegramClient()
 
   try {
-    const result = await client.signIn({
+    await client.signIn({
       phone,
       phoneCode: code,
       phoneCodeHash,
     })
 
-    // Check if result indicates signup required
-    const anyResult = result as any
-    if (anyResult.type === 'signUpRequired' || anyResult._ === 'auth.authorizationSignUpRequired') {
-      callbacks.onStateChange({
-        step: 'error',
-        message: 'Account not found. Please use an existing Telegram account.',
-      })
-      return
-    }
-
+    // signIn succeeded - user is authenticated
     callbacks.onStateChange({ step: 'done' })
   } catch (error: unknown) {
     // Check if 2FA is required (typed error check)

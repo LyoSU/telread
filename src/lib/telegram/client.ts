@@ -35,8 +35,8 @@ export type LogLevelType = (typeof LogLevel)[keyof typeof LogLevel]
  * Configure client logging after initialization
  */
 function setupClientLogging(client: TelegramClient): void {
-  // Access the internal log manager through the client
-  const logManager = (client as any).log?.mgr ?? (client as any)._log?.mgr
+  // Access the LogManager through client.log.mgr (public API)
+  const logManager = client.log.mgr
 
   if (!logManager) {
     if (import.meta.env.DEV) {
@@ -203,7 +203,7 @@ export function setLogLevel(level: LogLevelType): void {
     return
   }
 
-  const logManager = (clientInstance as any).log?.mgr ?? (clientInstance as any)._log?.mgr
+  const logManager = clientInstance.log.mgr
   if (logManager) {
     logManager.level = level
     if (import.meta.env.DEV) {
@@ -219,8 +219,7 @@ export function setLogLevel(level: LogLevelType): void {
 export function getLogLevel(): number {
   if (!clientInstance) return LogLevel.OFF
 
-  const logManager = (clientInstance as any).log?.mgr ?? (clientInstance as any)._log?.mgr
-  return logManager?.level ?? LogLevel.OFF
+  return clientInstance.log.mgr?.level ?? LogLevel.OFF
 }
 
 /**
