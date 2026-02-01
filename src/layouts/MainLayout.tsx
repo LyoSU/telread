@@ -1,7 +1,8 @@
 import { type ParentProps, type JSX, Show } from 'solid-js'
 import { A, useLocation } from '@solidjs/router'
 import { authStore, updateStore } from '@/lib/store'
-import { UserAvatar } from '@/components/ui'
+import { haptic } from '@/lib/utils'
+import { UserAvatar, PageTransition } from '@/components/ui'
 import { Home, Search, Bookmark, User, MessageCircle } from 'lucide-solid'
 
 /** Small dot badge for update indicator */
@@ -25,6 +26,7 @@ export function MainLayout(props: ParentProps) {
   let mainRef: HTMLElement | undefined
 
   const handleHomeClick = (e: MouseEvent) => {
+    haptic('light')
     if (location.pathname === '/') {
       e.preventDefault()
       if (mainRef && mainRef.scrollTop > 0) {
@@ -35,6 +37,10 @@ export function MainLayout(props: ParentProps) {
         window.dispatchEvent(new CustomEvent('home-tap-top'))
       }
     }
+  }
+
+  const handleNavClick = () => {
+    haptic('light')
   }
 
   const navItems: Array<{
@@ -107,14 +113,16 @@ export function MainLayout(props: ParentProps) {
       <main ref={mainRef} class="flex-1 h-screen overflow-y-auto custom-scrollbar">
         {/* Centered content - wider feed like Threads */}
         <div class="max-w-2xl mx-auto w-full min-h-full lg:border-x border-[var(--nav-border)]">
-          {props.children}
+          <PageTransition>
+            {props.children}
+          </PageTransition>
         </div>
       </main>
 
       {/* Mobile Bottom Navigation - hidden on desktop */}
       <div class="lg:hidden fixed bottom-4 left-0 right-0 z-50 flex items-center justify-between px-4 max-w-md mx-auto safe-bottom nav-container">
         {/* Left: User avatar */}
-        <A href="/settings" class="floating-circle relative">
+        <A href="/settings" class="floating-circle relative" onClick={handleNavClick}>
           <UserAvatar
             userId={authStore.user?.id ?? 0}
             name={authStore.user?.displayName ?? 'User'}
@@ -135,13 +143,14 @@ export function MainLayout(props: ParentProps) {
           <A
             href="/bookmarks"
             class={`nav-item ${isActive('/bookmarks') ? 'nav-item-active' : ''}`}
+            onClick={handleNavClick}
           >
             <Bookmark size={28} stroke-width={isActive('/bookmarks') ? 2.5 : 1.5} fill={isActive('/bookmarks') ? 'currentColor' : 'none'} />
           </A>
         </nav>
 
         {/* Right: Search */}
-        <A href="/channels" class="floating-circle">
+        <A href="/channels" class="floating-circle" onClick={handleNavClick}>
           <Search size={24} stroke-width={1.5} />
         </A>
       </div>

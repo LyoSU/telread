@@ -15,4 +15,5 @@ export {
 } from './Skeleton'
 export { ErrorState, FullPageError, InlineError } from './ErrorState'
 export { UpdatePrompt } from './UpdatePrompt'
+export { PageTransition } from './PageTransition'
 export * from './Icons'

@@ -171,7 +171,20 @@
     border: 1px solid var(--glass-border);
     color: var(--color-text-secondary);
     box-shadow: inset 0 1px 0 var(--glass-highlight);
-    transition: all 0.2s ease;
+    transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                background 0.15s ease,
+                color 0.15s ease,
+                box-shadow 0.15s ease;
+    
+    /* Native touch feel */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    
+    /* GPU acceleration */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
   }
 
   .pill:hover {
@@ -180,7 +193,8 @@
   }
 
   .pill:active {
-    transform: scale(0.97);
+    transform: translateZ(0) scale(0.95);
+    transition: transform 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
   .pill-active {
@@ -221,12 +235,26 @@
     backdrop-filter: blur(12px) brightness(105%) saturate(120%);
     border: 1px solid var(--glass-border);
     box-shadow: inset 0 1px 0 var(--glass-highlight);
-    transition: all 0.2s ease;
+    transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                background 0.15s ease;
+    
+    /* Native touch feel */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    
+    /* GPU acceleration */
+    transform: translateZ(0);
   }
 
   .reaction-pill:hover {
     background: var(--glass-bg-elevated);
-    transform: scale(1.05);
+    transform: translateZ(0) scale(1.05);
+  }
+
+  .reaction-pill:active {
+    transform: translateZ(0) scale(0.95);
+    transition: transform 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
   .reaction-emoji {
@@ -509,6 +537,9 @@
     @apply py-4;
     border-bottom: 1px solid var(--nav-border);
     overflow-x: hidden;
+    
+    /* Native touch feel */
+    -webkit-tap-highlight-color: transparent;
   }
 
   .post:last-child {
@@ -568,12 +599,46 @@
     box-shadow:
       0 4px 24px rgba(0, 0, 0, 0.08),
       inset 0 1px 0 hsl(0 0% 100% / 30%);
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                box-shadow 0.2s ease,
+                background 0.15s ease;
+    
+    /* GPU acceleration */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: transform;
+  }
+
+  /* Interactive glass card - for clickable cards */
+  .glass-card.cursor-pointer {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+  }
+
+  .glass-card.cursor-pointer:hover {
+    background: var(--glass-bg-elevated);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.12),
+      inset 0 1px 0 hsl(0 0% 100% / 40%);
+  }
+
+  .glass-card.cursor-pointer:active {
+    transform: translateZ(0) scale(0.98);
+    transition: transform 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
   .dark .glass-card {
     box-shadow:
       0 4px 24px rgba(0, 0, 0, 0.25),
       inset 0 1px 0 hsl(0 0% 100% / 10%);
+  }
+
+  .dark .glass-card.cursor-pointer:hover {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.35),
+      inset 0 1px 0 hsl(0 0% 100% / 15%);
   }
 
   /* Elevated glass - for modals and overlays */
@@ -603,7 +668,19 @@
     backdrop-filter: blur(12px) brightness(105%) saturate(120%);
     border: 1px solid var(--glass-border);
     box-shadow: inset 0 1px 0 var(--glass-highlight);
-    transition: all 0.15s ease;
+    transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                background 0.15s ease,
+                box-shadow 0.15s ease;
+    
+    /* Native touch feel */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    
+    /* GPU acceleration */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
   }
 
   .glass-btn:hover {
@@ -611,7 +688,8 @@
   }
 
   .glass-btn:active {
-    transform: scale(0.98);
+    transform: translateZ(0) scale(0.97);
+    transition: transform 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
   .glass-btn-primary {
@@ -625,6 +703,12 @@
 
   .glass-btn-primary:hover {
     background: var(--accent-hover);
+    box-shadow: 0 4px 12px rgba(0, 122, 255, 0.4);
+  }
+
+  .glass-btn-primary:active {
+    transform: translateZ(0) scale(0.97);
+    box-shadow: 0 1px 4px rgba(0, 122, 255, 0.3);
   }
 
   .glass-input {
@@ -657,12 +741,22 @@
   .skeleton::after {
     content: '';
     @apply absolute inset-0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-    animation: shimmer 1.5s infinite;
+    background: linear-gradient(
+      90deg, 
+      transparent 0%, 
+      rgba(255,255,255,0.15) 50%, 
+      transparent 100%
+    );
+    animation: shimmer 1.8s ease-in-out infinite;
   }
 
   .dark .skeleton::after {
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    background: linear-gradient(
+      90deg, 
+      transparent 0%, 
+      rgba(255,255,255,0.06) 50%, 
+      transparent 100%
+    );
   }
 
   /* ═══════════════════════════════════════════════════════════════════════
@@ -734,4 +828,23 @@
 @keyframes shimmer {
   from { transform: translateX(-100%); }
   to { transform: translateX(100%); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PAGE TRANSITIONS - Smooth native-like route changes
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.page-transition {
+  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+  will-change: opacity, transform;
+}
+
+.page-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.page-hidden {
+  opacity: 0;
+  transform: translateY(4px);
 }

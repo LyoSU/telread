@@ -1,6 +1,5 @@
 import { Show, createSignal } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
-import { Motion } from 'solid-motionone'
 import { GlassCard, GlassButton, UserAvatar, ConfirmDialog } from '@/components/ui'
 import { themeStore, authStore, updateStore, type Theme } from '@/lib/store'
 import { logout } from '@/lib/telegram'
@@ -38,10 +37,7 @@ function Settings() {
       </h1>
 
       {/* Account section */}
-      <Motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <div>
         <GlassCard class="p-4">
           <h2 class="text-sm font-semibold text-tertiary uppercase tracking-wide mb-4">
             Account
@@ -88,14 +84,10 @@ function Settings() {
           confirmText="Log Out"
           variant="danger"
         />
-      </Motion.div>
+      </div>
 
       {/* Appearance section */}
-      <Motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-      >
+      <div>
         <GlassCard class="p-4">
           <h2 class="text-sm font-semibold text-tertiary uppercase tracking-wide mb-4">
             Appearance
@@ -127,15 +119,10 @@ function Settings() {
             </div>
           </div>
         </GlassCard>
-      </Motion.div>
-
+      </div>
 
       {/* About section */}
-      <Motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
+      <div>
         <GlassCard class="p-4">
           <h2 class="text-sm font-semibold text-tertiary uppercase tracking-wide mb-4">
             About
@@ -178,34 +165,28 @@ function Settings() {
             </Show>
           </div>
         </GlassCard>
-      </Motion.div>
+      </div>
 
       {/* Author */}
-      <Motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
+      <a
+        href="https://t.me/lyblog"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="block"
       >
-        <a
-          href="https://t.me/lyblog"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="block"
-        >
-          <GlassCard class="p-4 hover:bg-[var(--glass-bg-elevated)] transition-colors">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-[var(--accent)]/15 flex items-center justify-center">
-                <Send size={20} class="text-accent" />
-              </div>
-              <div class="flex-1">
-                <p class="text-sm font-medium text-primary">@lyblog</p>
-                <p class="text-xs text-tertiary">Author's channel</p>
-              </div>
-              <ChevronRight size={20} class="text-tertiary" />
+        <GlassCard class="p-4 hover:bg-[var(--glass-bg-elevated)] transition-colors">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-[var(--accent)]/15 flex items-center justify-center">
+              <Send size={20} class="text-accent" />
             </div>
-          </GlassCard>
-        </a>
-      </Motion.div>
+            <div class="flex-1">
+              <p class="text-sm font-medium text-primary">@lyblog</p>
+              <p class="text-xs text-tertiary">Author's channel</p>
+            </div>
+            <ChevronRight size={20} class="text-tertiary" />
+          </div>
+        </GlassCard>
+      </a>
     </div>
   )
 }

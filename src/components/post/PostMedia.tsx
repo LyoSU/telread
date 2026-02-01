@@ -4,8 +4,9 @@ import { Motion } from 'solid-motionone'
 import { DEFAULT_ASPECT_RATIO } from '@/config/constants'
 import type { MessageMedia } from '@/lib/telegram'
 import { useMedia } from '@/lib/query'
+import { mediaController } from '@/lib/media'
 import { Skeleton } from '@/components/ui'
-import { Play, Pause, FileText, Music, MapPin, User, ExternalLink, X, Maximize2 } from 'lucide-solid'
+import { Play, Pause, FileText, Music, MapPin, User, ExternalLink, X, Maximize2, Volume2, VolumeX } from 'lucide-solid'
 
 interface PostMediaProps {
   channelId: number
@@ -377,6 +378,12 @@ export function PostMedia(props: PostMediaProps) {
 
 /**
  * Inline Voice Player with interactive waveform
+ * 
+ * Best practices:
+ * - NO autoplay (only on tap)
+ * - Auto-pause when scrolled out of view
+ * - Global controller (one audio at a time)
+ * - Media Session for lock screen controls
  */
 function InlineVoicePlayer(props: {
   channelId: number
@@ -384,28 +391,28 @@ function InlineVoicePlayer(props: {
   media: MessageMedia
   isVisible: () => boolean
 }) {
+  const mediaId = `voice-${props.channelId}-${props.messageId}`
+  
   const [isPlaying, setIsPlaying] = createSignal(false)
   const [currentTime, setCurrentTime] = createSignal(0)
   const [duration, setDuration] = createSignal(props.media.duration ?? 0)
+  
   let audioRef: HTMLAudioElement | undefined
   let visibilityObserver: IntersectionObserver | undefined
+  let unregister: (() => void) | undefined
 
-  // Pause audio when scrolled out of view
-  const setupVisibilityObserver = (el: HTMLDivElement) => {
+  // Pause when scrolled out of view
+  const setupContainer = (el: HTMLDivElement) => {
     visibilityObserver = new IntersectionObserver(
       (entries) => {
-        if (!entries[0]?.isIntersecting && audioRef && isPlaying()) {
-          audioRef.pause()
+        if (!entries[0]?.isIntersecting && isPlaying()) {
+          mediaController.pause(mediaId)
         }
       },
       { threshold: 0.2 }
     )
     visibilityObserver.observe(el)
   }
-
-  onCleanup(() => {
-    visibilityObserver?.disconnect()
-  })
 
   // Load full audio file
   const audioQuery = useMedia(
@@ -414,6 +421,17 @@ function InlineVoicePlayer(props: {
     () => undefined,
     props.isVisible
   )
+
+  // Setup audio element
+  const setupAudio = (el: HTMLAudioElement) => {
+    audioRef = el
+    
+    unregister = mediaController.register(mediaId, 'voice', el, {
+      onPause: () => setIsPlaying(false),
+    }, {
+      title: 'Voice message',
+    })
+  }
 
   const progress = () => duration() > 0 ? (currentTime() / duration()) * 100 : 0
   const waveform = () => props.media.waveform ?? []
@@ -438,9 +456,9 @@ function InlineVoicePlayer(props: {
     if (!audioRef) return
     
     if (isPlaying()) {
-      audioRef.pause()
+      mediaController.pause(mediaId)
     } else {
-      audioRef.play()
+      mediaController.play(mediaId)
     }
   }
 
@@ -461,8 +479,13 @@ function InlineVoicePlayer(props: {
     return formatDuration(duration())
   }
 
+  onCleanup(() => {
+    visibilityObserver?.disconnect()
+    unregister?.()
+  })
+
   return (
-    <div ref={setupVisibilityObserver} class="glass rounded-xl p-3 flex items-center gap-3">
+    <div ref={setupContainer} class="glass rounded-xl p-3 flex items-center gap-3">
       {/* Play/Pause button */}
       <button
         type="button"
@@ -510,7 +533,7 @@ function InlineVoicePlayer(props: {
       <Show when={audioQuery.data}>
         {(url) => (
           <audio
-            ref={audioRef}
+            ref={setupAudio}
             src={url()}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
@@ -530,7 +553,12 @@ function InlineVoicePlayer(props: {
 
 /**
  * Inline Video Note (кружок) - Circular video player like Telegram
- * Shows thumbnail first, then loads full video
+ * 
+ * Best practices:
+ * - Muted autoplay when visible
+ * - Loop playback
+ * - Tap to pause/unmute
+ * - Circular progress ring
  */
 function InlineVideoNote(props: {
   channelId: number
@@ -538,28 +566,43 @@ function InlineVideoNote(props: {
   media: MessageMedia
   isVisible: () => boolean
 }) {
+  const mediaId = `videonote-${props.channelId}-${props.messageId}`
+  
   const [isPlaying, setIsPlaying] = createSignal(false)
+  const [isMuted, setIsMuted] = createSignal(true)
   const [currentTime, setCurrentTime] = createSignal(0)
   const [duration, setDuration] = createSignal(props.media.duration ?? 0)
+  const [isLoaded, setIsLoaded] = createSignal(false)
+  const [isInViewport, setIsInViewport] = createSignal(false)
+  const [userPaused, setUserPaused] = createSignal(false)
+  
   let videoRef: HTMLVideoElement | undefined
   let visibilityObserver: IntersectionObserver | undefined
+  let unregister: (() => void) | undefined
 
-  // Pause video when scrolled out of view
-  const setupVisibilityObserver = (el: HTMLDivElement) => {
+  // Reactive autoplay - triggers when visibility OR loaded state changes
+  createEffect(() => {
+    const visible = isInViewport()
+    const loaded = isLoaded()
+    
+    if (visible && loaded && videoRef && !userPaused()) {
+      videoRef.muted = true
+      setIsMuted(true)
+      mediaController.play(mediaId)
+    } else if (!visible) {
+      mediaController.pause(mediaId)
+      setUserPaused(false) // Reset when leaving viewport
+    }
+  })
+
+  // Track visibility
+  const setupContainer = (el: HTMLDivElement) => {
     visibilityObserver = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting && videoRef && isPlaying()) {
-          videoRef.pause()
-        }
-      },
-      { threshold: 0.2 }
+      (entries) => setIsInViewport(entries[0]?.isIntersecting ?? false),
+      { threshold: 0.5 }
     )
     visibilityObserver.observe(el)
   }
-
-  onCleanup(() => {
-    visibilityObserver?.disconnect()
-  })
 
   // Load full video file
   const videoQuery = useMedia(
@@ -569,22 +612,49 @@ function InlineVideoNote(props: {
     props.isVisible
   )
 
+  // Setup video element
+  const setupVideo = (el: HTMLVideoElement) => {
+    videoRef = el
+    el.muted = true
+    el.loop = true
+    
+    unregister = mediaController.register(mediaId, 'video_note', el, {
+      onPause: () => setIsPlaying(false),
+    })
+  }
+
   const progress = () => duration() > 0 ? (currentTime() / duration()) * 100 : 0
   const size = 200
+  const circumference = 2 * Math.PI * 96
+  const strokeDashoffset = () => circumference - (progress() / 100) * circumference
 
   const handleClick = (e: MouseEvent) => {
     e.stopPropagation()
     if (!videoRef) return
-    if (isPlaying()) videoRef.pause()
-    else videoRef.play()
+    
+    if (isPlaying()) {
+      // If playing, toggle mute first, then pause on second tap
+      if (isMuted()) {
+        const nowUnmuted = mediaController.toggleMute(mediaId)
+        setIsMuted(!nowUnmuted)
+      } else {
+        mediaController.pause(mediaId)
+        setUserPaused(true) // User manually paused
+      }
+    } else {
+      setUserPaused(false)
+      mediaController.play(mediaId)
+    }
   }
 
-  const circumference = 2 * Math.PI * 96
-  const strokeDashoffset = () => circumference - (progress() / 100) * circumference
+  onCleanup(() => {
+    visibilityObserver?.disconnect()
+    unregister?.()
+  })
 
   return (
     <div 
-      ref={setupVisibilityObserver}
+      ref={setupContainer}
       class="relative cursor-pointer group"
       style={{ width: `${size}px`, height: `${size}px` }}
       onClick={handleClick}
@@ -594,16 +664,20 @@ function InlineVideoNote(props: {
         <Show when={videoQuery.data}>
           {(url) => (
             <video
-              ref={videoRef}
+              ref={setupVideo}
               src={url()}
               class="w-full h-full object-cover"
               loop
+              muted
               playsinline
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
               onTimeUpdate={() => setCurrentTime(videoRef?.currentTime ?? 0)}
-              onLoadedMetadata={() => setDuration(videoRef?.duration ?? props.media.duration ?? 0)}
-              preload="metadata"
+              onLoadedMetadata={() => {
+                setDuration(videoRef?.duration ?? props.media.duration ?? 0)
+                setIsLoaded(true)
+              }}
+              onVolumeChange={() => setIsMuted(videoRef?.muted ?? true)}
             />
           )}
         </Show>
@@ -623,26 +697,11 @@ function InlineVideoNote(props: {
         width={size} 
         height={size}
       >
-        {/* Background ring */}
+        <circle cx={size / 2} cy={size / 2} r={96} fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="3" />
         <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={96}
-          fill="none"
-          stroke="rgba(255,255,255,0.2)"
-          stroke-width="3"
-        />
-        {/* Progress ring */}
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={96}
-          fill="none"
-          stroke="var(--accent)"
-          stroke-width="3"
-          stroke-linecap="round"
-          stroke-dasharray={String(circumference)}
-          stroke-dashoffset={strokeDashoffset()}
+          cx={size / 2} cy={size / 2} r={96} fill="none"
+          stroke="var(--accent)" stroke-width="3" stroke-linecap="round"
+          stroke-dasharray={String(circumference)} stroke-dashoffset={strokeDashoffset()}
           class="transition-all duration-100"
         />
       </svg>
@@ -656,6 +715,13 @@ function InlineVideoNote(props: {
         </div>
       </Show>
 
+      {/* Mute indicator (when playing and muted) */}
+      <Show when={isPlaying() && isMuted()}>
+        <div class="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white backdrop-blur-sm">
+          <VolumeX size={14} />
+        </div>
+      </Show>
+
       {/* Duration badge */}
       <div class="absolute bottom-2 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-black/60 text-white text-xs font-medium backdrop-blur-sm">
         {isPlaying() ? formatDuration(currentTime()) : formatDuration(duration())}
@@ -666,6 +732,12 @@ function InlineVideoNote(props: {
 
 /**
  * Inline Audio Player with progress bar
+ * 
+ * Best practices:
+ * - NO autoplay (only on tap)
+ * - Auto-pause when scrolled out of view
+ * - Global controller (one audio at a time)
+ * - Media Session for lock screen controls
  */
 function InlineAudioPlayer(props: {
   channelId: number
@@ -673,28 +745,28 @@ function InlineAudioPlayer(props: {
   media: MessageMedia
   isVisible: () => boolean
 }) {
+  const mediaId = `audio-${props.channelId}-${props.messageId}`
+  
   const [isPlaying, setIsPlaying] = createSignal(false)
   const [currentTime, setCurrentTime] = createSignal(0)
   const [duration, setDuration] = createSignal(props.media.duration ?? 0)
+  
   let audioRef: HTMLAudioElement | undefined
   let visibilityObserver: IntersectionObserver | undefined
+  let unregister: (() => void) | undefined
 
-  // Pause audio when scrolled out of view
-  const setupVisibilityObserver = (el: HTMLDivElement) => {
+  // Pause when scrolled out of view
+  const setupContainer = (el: HTMLDivElement) => {
     visibilityObserver = new IntersectionObserver(
       (entries) => {
-        if (!entries[0]?.isIntersecting && audioRef && isPlaying()) {
-          audioRef.pause()
+        if (!entries[0]?.isIntersecting && isPlaying()) {
+          mediaController.pause(mediaId)
         }
       },
       { threshold: 0.2 }
     )
     visibilityObserver.observe(el)
   }
-
-  onCleanup(() => {
-    visibilityObserver?.disconnect()
-  })
 
   // Load full audio file
   const audioQuery = useMedia(
@@ -704,6 +776,18 @@ function InlineAudioPlayer(props: {
     props.isVisible
   )
 
+  // Setup audio element
+  const setupAudio = (el: HTMLAudioElement) => {
+    audioRef = el
+    
+    unregister = mediaController.register(mediaId, 'audio', el, {
+      onPause: () => setIsPlaying(false),
+    }, {
+      title: props.media.title || props.media.fileName || 'Audio',
+      artist: props.media.performer || 'Unknown artist',
+    })
+  }
+
   const progress = () => duration() > 0 ? (currentTime() / duration()) * 100 : 0
 
   const handlePlayPause = (e: MouseEvent) => {
@@ -711,9 +795,9 @@ function InlineAudioPlayer(props: {
     if (!audioRef) return
     
     if (isPlaying()) {
-      audioRef.pause()
+      mediaController.pause(mediaId)
     } else {
-      audioRef.play()
+      mediaController.play(mediaId)
     }
   }
 
@@ -727,8 +811,13 @@ function InlineAudioPlayer(props: {
     audioRef.currentTime = percent * duration()
   }
 
+  onCleanup(() => {
+    visibilityObserver?.disconnect()
+    unregister?.()
+  })
+
   return (
-    <div ref={setupVisibilityObserver} class="glass rounded-xl p-4">
+    <div ref={setupContainer} class="glass rounded-xl p-4">
       <div class="flex items-center gap-4">
         {/* Album art / Icon */}
         <div class="w-12 h-12 rounded-lg bg-[var(--accent)]/15 flex items-center justify-center flex-shrink-0">
@@ -786,7 +875,7 @@ function InlineAudioPlayer(props: {
       <Show when={audioQuery.data}>
         {(url) => (
           <audio
-            ref={audioRef}
+            ref={setupAudio}
             src={url()}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
@@ -806,6 +895,13 @@ function InlineAudioPlayer(props: {
 
 /**
  * Inline Video Player
+ * 
+ * Best practices (Twitter/Instagram style):
+ * - Muted autoplay when visible (>50% in viewport)
+ * - Auto-pause when scrolled out of view  
+ * - Only one video plays at a time (via mediaController)
+ * - Tap video = play/pause
+ * - Tap sound icon = mute/unmute
  */
 function InlineVideoPlayer(props: {
   channelId: number
@@ -815,21 +911,40 @@ function InlineVideoPlayer(props: {
   isVisible: () => boolean
   onExpand: () => void
 }) {
+  const mediaId = `video-${props.channelId}-${props.messageId}`
+  
   const [isPlaying, setIsPlaying] = createSignal(false)
+  const [isMuted, setIsMuted] = createSignal(true)
   const [showControls, setShowControls] = createSignal(true)
+  const [isLoaded, setIsLoaded] = createSignal(false)
+  const [isInViewport, setIsInViewport] = createSignal(false)
+  const [userPaused, setUserPaused] = createSignal(false)
+  
   let videoRef: HTMLVideoElement | undefined
   let hideControlsTimeout: number | undefined
   let visibilityObserver: IntersectionObserver | undefined
+  let unregister: (() => void) | undefined
 
-  // Pause video when scrolled out of view
-  const setupVisibilityObserver = (el: HTMLDivElement) => {
+  // Reactive autoplay - triggers when visibility OR loaded state changes
+  createEffect(() => {
+    const visible = isInViewport()
+    const loaded = isLoaded()
+    
+    if (visible && loaded && videoRef && !userPaused()) {
+      videoRef.muted = true
+      setIsMuted(true)
+      mediaController.play(mediaId)
+    } else if (!visible) {
+      mediaController.pause(mediaId)
+      setUserPaused(false) // Reset when leaving viewport
+    }
+  })
+
+  // Track visibility
+  const setupContainer = (el: HTMLDivElement) => {
     visibilityObserver = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting && videoRef && isPlaying()) {
-          videoRef.pause()
-        }
-      },
-      { threshold: 0.2 }
+      (entries) => setIsInViewport(entries[0]?.isIntersecting ?? false),
+      { threshold: 0.5 }
     )
     visibilityObserver.observe(el)
   }
@@ -842,29 +957,53 @@ function InlineVideoPlayer(props: {
     props.isVisible
   )
 
-  // Load full video on play
-  const [loadVideo, setLoadVideo] = createSignal(false)
+  // Load full video when visible
   const videoQuery = useMedia(
     () => props.channelId,
     () => props.messageId,
     () => undefined,
-    () => loadVideo() && props.isVisible()
+    props.isVisible
   )
 
-  const handlePlay = (e: MouseEvent) => {
-    e.stopPropagation()
-    setLoadVideo(true)
+  // Setup video element
+  const setupVideo = (el: HTMLVideoElement) => {
+    videoRef = el
+    el.muted = true
+    
+    // Register with global controller
+    unregister = mediaController.register(mediaId, 'video', el, {
+      onPause: () => setIsPlaying(false),
+    })
   }
-
-  createEffect(() => {
-    if (videoQuery.data && videoRef) videoRef.play()
-  })
 
   const handleVideoClick = (e: MouseEvent) => {
     e.stopPropagation()
     if (!videoRef) return
-    if (isPlaying()) videoRef.pause()
-    else videoRef.play()
+    
+    if (isPlaying()) {
+      mediaController.pause(mediaId)
+      setUserPaused(true) // User manually paused
+    } else {
+      setUserPaused(false)
+      mediaController.play(mediaId)
+    }
+    
+    // Show controls briefly
+    setShowControls(true)
+    clearTimeout(hideControlsTimeout)
+    hideControlsTimeout = window.setTimeout(() => {
+      if (isPlaying()) setShowControls(false)
+    }, 2000)
+  }
+
+  const handleMuteClick = (e: MouseEvent) => {
+    e.stopPropagation()
+    if (!videoRef) return
+    
+    const nowUnmuted = mediaController.toggleMute(mediaId)
+    setIsMuted(!nowUnmuted)
+    
+    // Keep controls visible when interacting
     setShowControls(true)
     clearTimeout(hideControlsTimeout)
     hideControlsTimeout = window.setTimeout(() => {
@@ -874,38 +1013,42 @@ function InlineVideoPlayer(props: {
 
   const handleExpand = (e: MouseEvent) => {
     e.stopPropagation()
-    if (videoRef) videoRef.pause()
+    mediaController.pause(mediaId)
     props.onExpand()
   }
 
   onCleanup(() => {
     clearTimeout(hideControlsTimeout)
     visibilityObserver?.disconnect()
+    unregister?.()
   })
 
   return (
     <div 
-      ref={setupVisibilityObserver}
+      ref={setupContainer}
       class="relative rounded-2xl overflow-hidden flex-shrink-0 shadow-sm hover:shadow-md transition-shadow bg-black" 
       style={props.containerStyle}
     >
-      {/* Video element (when loaded) */}
+      {/* Video element */}
       <Show when={videoQuery.data}>
         {(url) => (
           <video
-            ref={videoRef}
+            ref={setupVideo}
             src={url()}
             class="w-full h-full object-cover cursor-pointer"
             playsinline
+            muted
             onClick={handleVideoClick}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onEnded={() => setIsPlaying(false)}
+            onLoadedMetadata={() => setIsLoaded(true)}
+            onVolumeChange={() => setIsMuted(videoRef?.muted ?? true)}
           />
         )}
       </Show>
 
-      {/* Video thumbnail - show large when ready, inline thumb as placeholder */}
+      {/* Video thumbnail */}
       <Show when={!videoQuery.data}>
         <Show when={thumbQuery.data} fallback={
           <Show when={props.media.thumb} fallback={<div class="absolute inset-0 skeleton" />}>
@@ -914,50 +1057,63 @@ function InlineVideoPlayer(props: {
         }>
           {(url) => <img src={url()} alt="Video thumbnail" class="w-full h-full object-cover" />}
         </Show>
+        {/* Loading indicator */}
+        <Show when={videoQuery.isLoading}>
+          <div class="absolute inset-0 flex items-center justify-center bg-black/20">
+            <div class="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          </div>
+        </Show>
       </Show>
 
-      {/* Play button overlay */}
-      <Show when={!isPlaying() && showControls()}>
+      {/* Play/Pause overlay - only when paused */}
+      <Show when={!isPlaying() && videoQuery.data}>
         <div
-          class="absolute inset-0 flex items-center justify-center bg-black/20 cursor-pointer"
-          onClick={videoQuery.data ? handleVideoClick : handlePlay}
+          class="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer"
+          onClick={handleVideoClick}
         >
-          <button
-            type="button"
-            aria-label="Play video"
-            class="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center
-                   shadow-lg hover:bg-white hover:scale-105 transition-all
-                   focus:outline-none focus:ring-2 focus:ring-accent"
-          >
-            <Show when={!videoQuery.isLoading} fallback={
-              <div class="w-5 h-5 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
-            }>
-              <Play size={24} class="text-gray-900 ml-0.5" fill="currentColor" />
-            </Show>
-          </button>
+          <div class="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+            <Play size={28} class="text-gray-900 ml-1" fill="currentColor" />
+          </div>
         </div>
       </Show>
 
-      {/* Bottom controls - duration & expand */}
+      {/* Controls overlay */}
       <Show when={showControls() || !isPlaying()}>
-        <div class="absolute bottom-2 right-2 flex items-center gap-1.5">
-          {/* Duration badge */}
-          <Show when={props.media.duration !== undefined}>
-            <div class="px-2 py-1 rounded-lg bg-black/60 text-white text-xs font-medium backdrop-blur-sm">
-              {formatDuration(props.media.duration!)}
+        <div class="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent">
+          <div class="flex items-center justify-between">
+            {/* Mute/Unmute button */}
+            <button
+              type="button"
+              aria-label={isMuted() ? 'Unmute' : 'Mute'}
+              onClick={handleMuteClick}
+              class="p-1.5 rounded-lg bg-black/40 text-white/90 hover:text-white backdrop-blur-sm
+                     transition-colors focus:outline-none"
+            >
+              <Show when={isMuted()} fallback={<Volume2 size={18} />}>
+                <VolumeX size={18} />
+              </Show>
+            </button>
+            
+            <div class="flex items-center gap-1.5">
+              {/* Duration badge */}
+              <Show when={props.media.duration !== undefined}>
+                <div class="px-2 py-1 rounded-lg bg-black/40 text-white text-xs font-medium backdrop-blur-sm">
+                  {formatDuration(props.media.duration!)}
+                </div>
+              </Show>
+              
+              {/* Expand button */}
+              <button
+                type="button"
+                aria-label="Fullscreen"
+                onClick={handleExpand}
+                class="p-1.5 rounded-lg bg-black/40 text-white/80 hover:text-white backdrop-blur-sm
+                       transition-colors focus:outline-none"
+              >
+                <Maximize2 size={16} />
+              </button>
             </div>
-          </Show>
-          
-          {/* Expand button */}
-          <button
-            type="button"
-            aria-label="Fullscreen"
-            onClick={handleExpand}
-            class="p-1.5 rounded-lg bg-black/60 text-white/80 hover:text-white backdrop-blur-sm
-                   transition-colors focus:outline-none focus:ring-2 focus:ring-white"
-          >
-            <Maximize2 size={16} />
-          </button>
+          </div>
         </div>
       </Show>
     </div>

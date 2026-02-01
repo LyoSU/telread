@@ -27,8 +27,8 @@ function Home() {
 
   return (
     <div class="h-full">
-      {/* Sticky header */}
-      <div class="sticky top-0 z-20 bg-[var(--color-bg)]/80 backdrop-blur-xl border-b border-[var(--nav-border)]">
+      {/* Sticky header - glass effect */}
+      <div class="sticky top-0 z-20 glass border-b border-[var(--nav-border)]">
         <div class="flex items-center justify-center py-4">
           <h1 class="text-[15px] font-semibold text-primary">Feed</h1>
         </div>
