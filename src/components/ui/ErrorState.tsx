@@ -26,43 +26,43 @@ interface ErrorStateProps extends ParentProps {
  */
 const variantConfig: Record<
   ErrorVariant,
-  { title: string; description: string; icon: JSX.Element; color: string }
+  { title: string; description: string; icon: () => JSX.Element; color: string }
 > = {
   error: {
     title: 'Something went wrong',
     description: "We couldn't complete your request. Please try again.",
     color: 'var(--danger)',
-    icon: <AlertTriangle size={32} />,
+    icon: () => <AlertTriangle size={32} />,
   },
   empty: {
     title: 'Nothing here yet',
     description: 'This section is empty.',
     color: 'var(--color-text-tertiary)',
-    icon: <Inbox size={32} />,
+    icon: () => <Inbox size={32} />,
   },
   'not-found': {
     title: 'Not found',
     description: "We couldn't find what you're looking for.",
     color: 'var(--warning)',
-    icon: <Frown size={32} />,
+    icon: () => <Frown size={32} />,
   },
   network: {
     title: 'Connection problem',
     description: 'Please check your internet connection and try again.',
     color: 'var(--warning)',
-    icon: <WifiOff size={32} />,
+    icon: () => <WifiOff size={32} />,
   },
   auth: {
     title: 'Session expired',
     description: 'Please sign in again to continue.',
     color: 'var(--accent)',
-    icon: <Lock size={32} />,
+    icon: () => <Lock size={32} />,
   },
   fatal: {
     title: 'Critical error',
     description: 'An unexpected error occurred. Please restart the app.',
     color: 'var(--danger)',
-    icon: <AlertCircle size={32} />,
+    icon: () => <AlertCircle size={32} />,
   },
 }
 
@@ -79,7 +79,7 @@ export function ErrorState(props: ErrorStateProps) {
 
   const title = () => props.title ?? config().title
   const description = () => props.description ?? config().description
-  const icon = () => props.icon ?? config().icon
+  const icon = () => props.icon ?? config().icon()
 
   if (props.compact) {
     return (

@@ -682,9 +682,6 @@ export async function downloadProfilePhoto(
   // Check in-memory cache first (non-evicting, blob URLs stay valid)
   const memCached = profilePhotoCache.get(cacheKey)
   if (memCached) {
-    if (import.meta.env.DEV) {
-      console.log(`[Avatar] ${peerId} from RAM cache`)
-    }
     return memCached
   }
 
@@ -692,22 +689,12 @@ export async function downloadProfilePhoto(
   // Note: getCachedProfilePhoto already stores in memory cache if found
   const persistedUrl = await getCachedProfilePhoto(peerId, size)
   if (persistedUrl) {
-    if (import.meta.env.DEV) {
-      console.log(`[Avatar] ${peerId} from IndexedDB cache`)
-    }
     return persistedUrl
   }
 
   // No cache - check if client is ready for API calls
   if (!isClientReady()) {
-    if (import.meta.env.DEV) {
-      console.log(`[Avatar] ${peerId} - client not ready, no cache`)
-    }
     throw new Error('Client not ready')
-  }
-  
-  if (import.meta.env.DEV) {
-    console.log(`[Avatar] ${peerId} - fetching from API`)
   }
 
   const client = getTelegramClient()

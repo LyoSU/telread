@@ -97,9 +97,10 @@ export interface TimelineData {
 
 /**
  * Maximum posts to persist in IndexedDB
- * Keep it reasonable to avoid large storage and slow restore
+ * Large for offline reading and history browsing
+ * ~5000 posts * ~2KB = ~10MB (acceptable for IndexedDB)
  */
-const MAX_SYNCED_POSTS = 100
+const MAX_SYNCED_POSTS = 5000
 
 /**
  * Type for synced posts storage
