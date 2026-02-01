@@ -2,9 +2,9 @@ import { Show, createSignal } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
 import { Motion } from 'solid-motionone'
 import { GlassCard, GlassButton, UserAvatar, ConfirmDialog } from '@/components/ui'
-import { themeStore, authStore, type Theme } from '@/lib/store'
+import { themeStore, authStore, updateStore, type Theme } from '@/lib/store'
 import { logout } from '@/lib/telegram'
-import { Send, ChevronRight } from 'lucide-solid'
+import { Send, ChevronRight, RefreshCw, Check } from 'lucide-solid'
 
 /**
  * Settings page
@@ -130,11 +130,61 @@ function Settings() {
       </Motion.div>
 
 
-      {/* Author */}
+      {/* About section */}
       <Motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
+      >
+        <GlassCard class="p-4">
+          <h2 class="text-sm font-semibold text-tertiary uppercase tracking-wide mb-4">
+            About
+          </h2>
+
+          {/* Version & Update */}
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-primary">TelRead</p>
+              <p class="text-xs text-tertiary">
+                Built {new Date(__BUILD_TIME__).toLocaleDateString(undefined, { 
+                  month: 'short', 
+                  day: 'numeric',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </p>
+            </div>
+            
+            <Show
+              when={updateStore.updateAvailable}
+              fallback={
+                <div class="flex items-center gap-1.5 text-xs text-tertiary">
+                  <Check size={14} />
+                  <span>Up to date</span>
+                </div>
+              }
+            >
+              <GlassButton
+                variant="primary"
+                size="sm"
+                onClick={() => updateStore.applyUpdate()}
+                disabled={updateStore.isUpdating}
+                class="flex items-center gap-1.5"
+              >
+                <RefreshCw size={14} class={updateStore.isUpdating ? 'animate-spin' : ''} />
+                {updateStore.isUpdating ? 'Updating...' : 'Update'}
+              </GlassButton>
+            </Show>
+          </div>
+        </GlassCard>
+      </Motion.div>
+
+      {/* Author */}
+      <Motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
       >
         <a
           href="https://t.me/lyblog"

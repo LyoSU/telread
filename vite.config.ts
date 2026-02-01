@@ -6,6 +6,9 @@ import path from 'path'
 export default defineConfig({
   // For GitHub Pages without custom domain, set VITE_BASE=/repo-name/
   base: process.env.VITE_BASE || '/',
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     solid(),
     VitePWA({

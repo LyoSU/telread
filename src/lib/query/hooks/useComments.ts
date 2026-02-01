@@ -16,6 +16,7 @@ import {
   type CommentUpdate,
   type CommentSubscription,
 } from '@/lib/telegram'
+import { isFloodWait } from '@/lib/telegram/errors'
 import { authStore } from '@/lib/store'
 import { queryKeys } from '../keys'
 
@@ -92,6 +93,14 @@ export function useComments(
             queryKey: queryKeys.media.profile(authorId),
             queryFn: () => downloadProfilePhoto(authorId, 'small'),
             staleTime: 1000 * 60 * 60 * 24, // 24 hours
+            retry: (failureCount, error) => {
+              if (isFloodWait(error)) return failureCount < 2 && error.seconds < 60
+              return failureCount < 2
+            },
+            retryDelay: (failureCount, error) => {
+              if (isFloodWait(error)) return (error.seconds + 1) * 1000
+              return Math.min(1000 * 2 ** failureCount, 30000)
+            },
           })
         }
       }

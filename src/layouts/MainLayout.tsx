@@ -1,8 +1,17 @@
-import { type ParentProps, type JSX } from 'solid-js'
+import { type ParentProps, type JSX, Show } from 'solid-js'
 import { A, useLocation } from '@solidjs/router'
-import { authStore } from '@/lib/store'
+import { authStore, updateStore } from '@/lib/store'
 import { UserAvatar } from '@/components/ui'
 import { Home, Search, Bookmark, User, MessageCircle } from 'lucide-solid'
+
+/** Small dot badge for update indicator */
+function UpdateBadge() {
+  return (
+    <Show when={updateStore.updateAvailable}>
+      <span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-[var(--accent)] rounded-full border-2 border-[var(--bg-primary)]" />
+    </Show>
+  )
+}
 
 /**
  * Main application layout - Threads-style design
@@ -51,7 +60,12 @@ export function MainLayout(props: ParentProps) {
     {
       path: '/settings',
       label: 'Profile',
-      icon: (active) => <User size={28} stroke-width={active ? 2.5 : 1.5} />,
+      icon: (active) => (
+        <span class="relative">
+          <User size={28} stroke-width={active ? 2.5 : 1.5} />
+          <UpdateBadge />
+        </span>
+      ),
     },
   ]
 
@@ -100,12 +114,13 @@ export function MainLayout(props: ParentProps) {
       {/* Mobile Bottom Navigation - hidden on desktop */}
       <div class="lg:hidden fixed bottom-4 left-0 right-0 z-50 flex items-center justify-between px-4 max-w-md mx-auto safe-bottom nav-container">
         {/* Left: User avatar */}
-        <A href="/settings" class="floating-circle">
+        <A href="/settings" class="floating-circle relative">
           <UserAvatar
             userId={authStore.user?.id ?? 0}
             name={authStore.user?.displayName ?? 'User'}
             size="md"
           />
+          <UpdateBadge />
         </A>
 
         {/* Center: Nav items (Home, Bookmarks) */}

@@ -1,8 +1,9 @@
-import { createSignal, onMount, onCleanup, Show } from 'solid-js'
+import { onMount, onCleanup, Show } from 'solid-js'
 import { Portal } from 'solid-js/web'
 import { Motion, Presence } from 'solid-motionone'
 import { RefreshCw, X } from 'lucide-solid'
 import { GlassButton } from './GlassButton'
+import { updateStore } from '@/lib/store'
 
 /**
  * Update prompt - shown when a new version is available
@@ -11,42 +12,22 @@ import { GlassButton } from './GlassButton'
  * Updates are downloaded in background, but only applied when user confirms.
  */
 export function UpdatePrompt() {
-  const [showPrompt, setShowPrompt] = createSignal(false)
-  const [isUpdating, setIsUpdating] = createSignal(false)
-
-  const handleUpdateAvailable = () => {
-    setShowPrompt(true)
-  }
-
-  const handleUpdate = async () => {
-    setIsUpdating(true)
-    try {
-      // Call the SW update function exposed on window
-      await window.__swUpdate?.()
-      // Reload to activate new version
-      window.location.reload()
-    } catch (error) {
-      console.error('[UpdatePrompt] Failed to update:', error)
-      setIsUpdating(false)
-    }
-  }
-
-  const handleDismiss = () => {
-    setShowPrompt(false)
-  }
-
   onMount(() => {
+    const handleUpdateAvailable = () => {
+      updateStore.markUpdateAvailable()
+    }
+    
     window.addEventListener('sw-update-available', handleUpdateAvailable)
-  })
-
-  onCleanup(() => {
-    window.removeEventListener('sw-update-available', handleUpdateAvailable)
+    
+    onCleanup(() => {
+      window.removeEventListener('sw-update-available', handleUpdateAvailable)
+    })
   })
 
   return (
     <Portal>
       <Presence>
-        <Show when={showPrompt()}>
+        <Show when={updateStore.shouldShowPrompt}>
           <Motion.div
             initial={{ opacity: 0, y: 50, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -73,7 +54,7 @@ export function UpdatePrompt() {
 
                 {/* Dismiss */}
                 <button
-                  onClick={handleDismiss}
+                  onClick={() => updateStore.dismissPrompt()}
                   class="p-1 rounded-full hover:bg-[var(--pill-bg)] transition-colors"
                   aria-label="Dismiss"
                 >
@@ -87,7 +68,7 @@ export function UpdatePrompt() {
                   variant="ghost"
                   size="sm"
                   class="flex-1"
-                  onClick={handleDismiss}
+                  onClick={() => updateStore.dismissPrompt()}
                 >
                   Later
                 </GlassButton>
@@ -95,10 +76,10 @@ export function UpdatePrompt() {
                   variant="primary"
                   size="sm"
                   class="flex-1"
-                  onClick={handleUpdate}
-                  disabled={isUpdating()}
+                  onClick={() => updateStore.applyUpdate()}
+                  disabled={updateStore.isUpdating}
                 >
-                  {isUpdating() ? 'Updating...' : 'Update now'}
+                  {updateStore.isUpdating ? 'Updating...' : 'Update now'}
                 </GlassButton>
               </div>
             </div>
