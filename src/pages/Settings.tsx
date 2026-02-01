@@ -146,7 +146,7 @@ function Settings() {
             <div>
               <p class="text-sm font-medium text-primary">TelRead</p>
               <p class="text-xs text-tertiary">
-                Built {new Date(__BUILD_TIME__).toLocaleDateString(undefined, { 
+                Built {new Date(__BUILD_TIME__).toLocaleString(undefined, { 
                   month: 'short', 
                   day: 'numeric',
                   year: 'numeric',

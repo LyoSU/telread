@@ -1,4 +1,4 @@
-import { onMount, onCleanup, Show } from 'solid-js'
+import { Show } from 'solid-js'
 import { Portal } from 'solid-js/web'
 import { Motion, Presence } from 'solid-motionone'
 import { RefreshCw, X } from 'lucide-solid'
@@ -12,18 +12,6 @@ import { updateStore } from '@/lib/store'
  * Updates are downloaded in background, but only applied when user confirms.
  */
 export function UpdatePrompt() {
-  onMount(() => {
-    const handleUpdateAvailable = () => {
-      updateStore.markUpdateAvailable()
-    }
-    
-    window.addEventListener('sw-update-available', handleUpdateAvailable)
-    
-    onCleanup(() => {
-      window.removeEventListener('sw-update-available', handleUpdateAvailable)
-    })
-  })
-
   return (
     <Portal>
       <Presence>

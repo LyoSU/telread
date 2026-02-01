@@ -4,6 +4,7 @@ import { registerSW } from 'virtual:pwa-register'
 import '@/styles/index.css'
 import App from './App'
 import { cacheReadyPromise } from '@/lib/query/client'
+import { updateStore } from '@/lib/store'
 
 // Safety net for SolidJS cleanNode errors during navigation
 // These shouldn't occur with proper cleanup, but suppress them just in case
@@ -48,8 +49,8 @@ cacheReadyPromise.then(() => {
 const updateSW = registerSW({
   immediate: true,
   onNeedRefresh() {
-    // New version available - show update prompt
-    window.dispatchEvent(new CustomEvent('sw-update-available'))
+    // New version available - update store directly (no race condition)
+    updateStore.markUpdateAvailable()
   },
   onRegisteredSW(_swUrl, registration) {
     // Check for updates every hour (downloads only, doesn't apply)
