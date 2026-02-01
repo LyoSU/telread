@@ -16,4 +16,5 @@ export {
 export { ErrorState, FullPageError, InlineError } from './ErrorState'
 export { UpdatePrompt } from './UpdatePrompt'
 export { PageTransition } from './PageTransition'
+export { Lightbox, createLightbox, type LightboxItem } from './Lightbox'
 export * from './Icons'

@@ -1,12 +1,11 @@
 import { createSignal, Show, Match, Switch, For, onCleanup, onMount, createMemo, createEffect } from 'solid-js'
 import { Portal } from 'solid-js/web'
-import { Motion } from 'solid-motionone'
 import { DEFAULT_ASPECT_RATIO } from '@/config/constants'
 import type { MessageMedia } from '@/lib/telegram'
 import { useMedia } from '@/lib/query'
 import { mediaController } from '@/lib/media'
-import { Skeleton } from '@/components/ui'
-import { Play, Pause, FileText, Music, MapPin, User, ExternalLink, X, Volume2, VolumeX } from 'lucide-solid'
+import { Skeleton, Lightbox, type LightboxItem } from '@/components/ui'
+import { Play, Pause, FileText, Music, MapPin, User, ExternalLink, Volume2, VolumeX, X } from 'lucide-solid'
 
 interface PostMediaProps {
   channelId: number
@@ -30,13 +29,38 @@ export function PostMedia(props: PostMediaProps) {
   
   let observer: IntersectionObserver | undefined
 
-  // Load full resolution image
+  // Load large thumbnail for preview
   const mediaQuery = useMedia(
     () => props.channelId,
     () => props.messageId,
     () => 'large',
     isVisible
   )
+
+  // Load full resolution for lightbox
+  const fullQuery = useMedia(
+    () => props.channelId,
+    () => props.messageId,
+    () => undefined,
+    isExpanded
+  )
+
+  // Lightbox item for PhotoSwipe (photos only)
+  const lightboxItems = (): LightboxItem[] => {
+    if (props.media.type !== 'photo') return []
+    const url = fullQuery.data
+    if (!url) return []
+    
+    return [{
+      src: url,
+      width: props.media.width || 1200,
+      height: props.media.height || 800,
+      thumb: props.media.thumb,
+      type: 'image',
+    }]
+  }
+  
+  const isVideoType = () => props.media.type === 'video' || props.media.type === 'video_note'
 
   // Memoized aspect ratio calculation
   const aspectRatio = createMemo(() => {
@@ -361,13 +385,22 @@ export function PostMedia(props: PostMediaProps) {
         </Match>
       </Switch>
 
-      {/* Fullscreen modal - rendered in Portal to avoid event propagation issues */}
-      <Show when={isExpanded()}>
+      {/* PhotoSwipe lightbox for photos */}
+      <Lightbox
+        items={lightboxItems()}
+        index={0}
+        open={isExpanded() && props.media.type === 'photo' && lightboxItems().length > 0}
+        onClose={() => setIsExpanded(false)}
+      />
+      
+      {/* Simple fullscreen modal for videos */}
+      <Show when={isExpanded() && isVideoType()}>
         <Portal>
-          <MediaModal
-            channelId={props.channelId}
-            messageId={props.messageId}
-            media={props.media}
+          <VideoModal
+            url={fullQuery.data ?? undefined}
+            isLoading={fullQuery.isLoading}
+            duration={props.media.duration}
+            isRound={props.media.type === 'video_note'}
             onClose={() => setIsExpanded(false)}
           />
         </Portal>
@@ -1158,85 +1191,56 @@ function GifPlayer(props: {
 }
 
 /**
- * Fullscreen media modal with video player
+ * Simple fullscreen video modal
+ * Native video controls, swipe down to close
  */
-function MediaModal(props: {
-  channelId: number
-  messageId: number
-  media: MessageMedia
+function VideoModal(props: {
+  url: string | undefined
+  isLoading: boolean
+  duration?: number
+  isRound?: boolean
   onClose: () => void
 }) {
-  // Load full resolution - query handles cleanup automatically
-  const fullQuery = useMedia(
-    () => props.channelId,
-    () => props.messageId,
-    () => undefined
-  )
+  let videoRef: HTMLVideoElement | undefined
+  let closedByBack = false
 
-  // Track if closed by back button to avoid double history.back()
-  let closedByBackButton = false
-
-  // Swipe-down to close (like Instagram/Telegram)
+  // Swipe to close
   let touchStartY = 0
-  let touchStartTime = 0
-  const [swipeOffset, setSwipeOffset] = createSignal(0)
-  const [isAnimating, setIsAnimating] = createSignal(false)
-  const SWIPE_THRESHOLD = 100
-  const VELOCITY_THRESHOLD = 0.5 // px/ms
+  const [offsetY, setOffsetY] = createSignal(0)
 
   const handleTouchStart = (e: TouchEvent) => {
-    if (isAnimating()) return
     touchStartY = e.touches[0].clientY
-    touchStartTime = Date.now()
-    setSwipeOffset(0)
   }
 
   const handleTouchMove = (e: TouchEvent) => {
-    if (isAnimating()) return
     const deltaY = e.touches[0].clientY - touchStartY
-    
-    // Only allow downward swipe for dismissal (with resistance at top)
     if (deltaY > 0) {
-      // Add rubber-band resistance as user swipes further
-      const resistance = 1 - Math.min(deltaY / 600, 0.5)
-      setSwipeOffset(deltaY * resistance)
-      e.preventDefault()
+      setOffsetY(deltaY)
     }
   }
 
   const handleTouchEnd = () => {
-    if (isAnimating()) return
-    
-    const deltaY = swipeOffset()
-    const deltaTime = Date.now() - touchStartTime
-    const velocity = deltaY / deltaTime
-
-    // Close if swiped far enough OR fast enough
-    if (deltaY > SWIPE_THRESHOLD || velocity > VELOCITY_THRESHOLD) {
-      setIsAnimating(true)
-      setSwipeOffset(window.innerHeight) // Animate off screen
-      setTimeout(() => closeModal(), 200)
+    if (offsetY() > 100) {
+      close()
     } else {
-      // Snap back
-      setSwipeOffset(0)
+      setOffsetY(0)
     }
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault()
-      closeModal()
+      close()
     }
   }
 
   const handlePopState = () => {
-    closedByBackButton = true
+    closedByBack = true
     props.onClose()
   }
 
-  const closeModal = () => {
-    // Remove our history entry before closing
-    if (!closedByBackButton) {
+  const close = () => {
+    if (!closedByBack) {
       history.back()
     }
     props.onClose()
@@ -1245,9 +1249,7 @@ function MediaModal(props: {
   onMount(() => {
     document.addEventListener('keydown', handleKeyDown)
     document.body.style.overflow = 'hidden'
-    
-    // Push fake history entry so back button closes modal
-    history.pushState({ modal: 'media' }, '')
+    history.pushState({ modal: 'video' }, '')
     window.addEventListener('popstate', handlePopState)
   })
 
@@ -1257,285 +1259,57 @@ function MediaModal(props: {
     document.body.style.overflow = ''
   })
 
-  const isVideo = () => props.media.type === 'video' || props.media.type === 'video_note'
+  const opacity = () => Math.max(0, 1 - offsetY() / 300)
 
   return (
-    <Motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      class="fixed inset-0 z-[9999] bg-black flex items-center justify-center"
-      onClick={closeModal}
+    <div
+      class="fixed inset-0 z-[9999] flex items-center justify-center"
+      style={{ 'background-color': `rgba(0, 0, 0, ${opacity()})` }}
+      onClick={close}
     >
       {/* Close button */}
       <button
         type="button"
         aria-label="Close"
-        class="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors z-20
-               focus:outline-none focus:ring-2 focus:ring-white"
-        onClick={closeModal}
+        class="absolute top-4 right-4 p-2 text-white/70 hover:text-white z-20 
+               focus:outline-none transition-colors"
+        style={{ 'padding-top': 'env(safe-area-inset-top, 0)' }}
+        onClick={close}
       >
         <X size={32} />
       </button>
 
+      {/* Video container */}
       <div
-        class="w-full h-full flex items-center justify-center"
+        class="w-full h-full flex items-center justify-center p-4"
         style={{
-          transform: `translateY(${swipeOffset()}px)`,
-          opacity: Math.max(0, 1 - swipeOffset() / 400),
-          transition: isAnimating() || swipeOffset() === 0 ? 'transform 0.2s ease-out, opacity 0.2s ease-out' : 'none',
+          transform: `translateY(${offsetY()}px)`,
+          transition: offsetY() === 0 ? 'transform 0.2s ease-out' : 'none',
         }}
         onClick={(e) => e.stopPropagation()}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        {/* Photo */}
-        <Show when={props.media.type === 'photo'}>
-          <Show
-            when={fullQuery.data}
-            fallback={
-              <div class="animate-spin w-8 h-8 border-2 border-white border-t-transparent rounded-full" />
-            }
-          >
-            {(url) => (
-              <img
-                src={url()}
-                alt="Full size"
-                class="max-w-full max-h-full object-contain"
-              />
-            )}
-          </Show>
-        </Show>
-
-        {/* Video Player */}
-        <Show when={isVideo()}>
-          <FullscreenVideoPlayer
-            url={fullQuery.data ?? undefined}
-            isLoading={fullQuery.isLoading}
-            duration={props.media.duration ?? 0}
-            isRound={props.media.type === 'video_note'}
-            onClose={closeModal}
-          />
-        </Show>
-      </div>
-    </Motion.div>
-  )
-}
-
-/**
- * Fullscreen video player with Telegram-style controls
- */
-function FullscreenVideoPlayer(props: {
-  url: string | undefined
-  isLoading: boolean
-  duration: number
-  isRound?: boolean
-  onClose: () => void
-}) {
-  const [isPlaying, setIsPlaying] = createSignal(false)
-  const [currentTime, setCurrentTime] = createSignal(0)
-  const [duration, setDuration] = createSignal(props.duration)
-  const [showControls, setShowControls] = createSignal(true)
-  const [isMuted, setIsMuted] = createSignal(false)
-  let videoRef: HTMLVideoElement | undefined
-  let hideControlsTimeout: number | undefined
-
-  const progress = () => duration() > 0 ? (currentTime() / duration()) * 100 : 0
-
-  // Auto-hide controls after 3 seconds
-  const resetHideTimer = () => {
-    setShowControls(true)
-    clearTimeout(hideControlsTimeout)
-    hideControlsTimeout = window.setTimeout(() => {
-      if (isPlaying()) setShowControls(false)
-    }, 3000)
-  }
-
-  // Auto-play when video loads
-  createEffect(() => {
-    if (props.url && videoRef) {
-      videoRef.play().catch(() => {})
-      resetHideTimer()
-    }
-  })
-
-  const handleVideoClick = (e: MouseEvent) => {
-    e.stopPropagation()
-    if (!videoRef) return
-    
-    if (isPlaying()) {
-      videoRef.pause()
-    } else {
-      videoRef.play()
-    }
-    resetHideTimer()
-  }
-
-  const handleProgressClick = (e: MouseEvent) => {
-    e.stopPropagation()
-    if (!videoRef || duration() === 0) return
-    
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const percent = x / rect.width
-    videoRef.currentTime = percent * duration()
-  }
-
-  const toggleMute = (e: MouseEvent) => {
-    e.stopPropagation()
-    if (!videoRef) return
-    videoRef.muted = !videoRef.muted
-    setIsMuted(videoRef.muted)
-  }
-
-  // Keyboard controls
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (!videoRef) return
-    
-    switch (e.key) {
-      case ' ':
-      case 'k':
-        e.preventDefault()
-        if (isPlaying()) videoRef.pause()
-        else videoRef.play()
-        break
-      case 'ArrowLeft':
-        e.preventDefault()
-        videoRef.currentTime = Math.max(0, videoRef.currentTime - 5)
-        break
-      case 'ArrowRight':
-        e.preventDefault()
-        videoRef.currentTime = Math.min(duration(), videoRef.currentTime + 5)
-        break
-      case 'm':
-        e.preventDefault()
-        videoRef.muted = !videoRef.muted
-        setIsMuted(videoRef.muted)
-        break
-    }
-    resetHideTimer()
-  }
-
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown)
-  })
-
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown)
-    clearTimeout(hideControlsTimeout)
-  })
-
-  return (
-    <div 
-      class="relative w-full h-full flex items-center justify-center"
-      onMouseMove={resetHideTimer}
-      onClick={handleVideoClick}
-    >
-      {/* Loading spinner */}
-      <Show when={props.isLoading || !props.url}>
-        <div class="animate-spin w-10 h-10 border-3 border-white border-t-transparent rounded-full" />
-      </Show>
-
-      {/* Video */}
-      <Show when={props.url}>
-        {(url) => (
-          <video
-            ref={videoRef}
-            src={url()}
-            class={`max-w-full max-h-full ${props.isRound ? 'rounded-full' : ''}`}
-            playsinline
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => {
-              setIsPlaying(false)
-              setShowControls(true)
-            }}
-            onEnded={() => {
-              setIsPlaying(false)
-              setShowControls(true)
-            }}
-            onTimeUpdate={() => setCurrentTime(videoRef?.currentTime ?? 0)}
-            onLoadedMetadata={() => setDuration(videoRef?.duration ?? props.duration)}
-          />
-        )}
-      </Show>
-
-      {/* Center play/pause indicator (shows briefly on toggle) */}
-      <Show when={showControls() && !isPlaying() && props.url}>
-        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div class="w-20 h-20 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center">
-            <Play size={40} class="text-white ml-1" fill="currentColor" />
-          </div>
-        </div>
-      </Show>
-
-      {/* Bottom controls */}
-      <div 
-        class={`absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent
-                transition-opacity duration-300 ${showControls() ? 'opacity-100' : 'opacity-0'}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Progress bar */}
-        <div 
-          class="w-full h-1 bg-white/30 rounded-full cursor-pointer mb-4 group"
-          onClick={handleProgressClick}
+        <Show
+          when={props.url}
+          fallback={
+            <Show when={props.isLoading}>
+              <div class="animate-spin w-10 h-10 border-2 border-white border-t-transparent rounded-full" />
+            </Show>
+          }
         >
-          {/* Buffered progress could go here */}
-          <div 
-            class="h-full bg-white rounded-full relative transition-all"
-            style={{ width: `${progress()}%` }}
-          >
-            {/* Scrubber handle */}
-            <div class="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full 
-                        opacity-0 group-hover:opacity-100 transition-opacity shadow-lg" />
-          </div>
-        </div>
-
-        {/* Controls row */}
-        <div class="flex items-center gap-4">
-          {/* Play/Pause */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              handleVideoClick(e)
-            }}
-            class="p-2 text-white hover:text-white/80 transition-colors"
-          >
-            <Show when={isPlaying()} fallback={<Play size={28} fill="currentColor" />}>
-              <Pause size={28} fill="currentColor" />
-            </Show>
-          </button>
-
-          {/* Time */}
-          <div class="text-white text-sm font-medium">
-            {formatDuration(currentTime())} / {formatDuration(duration())}
-          </div>
-
-          {/* Spacer */}
-          <div class="flex-1" />
-
-          {/* Mute */}
-          <button
-            type="button"
-            onClick={toggleMute}
-            class="p-2 text-white hover:text-white/80 transition-colors"
-          >
-            <Show when={isMuted()} fallback={
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
-                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-              </svg>
-            }>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
-                <line x1="23" y1="9" x2="17" y2="15" />
-                <line x1="17" y1="9" x2="23" y2="15" />
-              </svg>
-            </Show>
-          </button>
-        </div>
+          {(url) => (
+            <video
+              ref={videoRef}
+              src={url()}
+              class={`max-w-full max-h-full ${props.isRound ? 'rounded-full' : ''}`}
+              controls
+              autoplay
+              playsinline
+            />
+          )}
+        </Show>
       </div>
     </div>
   )
