@@ -14,4 +14,5 @@ export {
   CommentSkeleton,
 } from './Skeleton'
 export { ErrorState, FullPageError, InlineError } from './ErrorState'
+export { UpdatePrompt } from './UpdatePrompt'
 export * from './Icons'

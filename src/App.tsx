@@ -13,7 +13,7 @@ import {
 } from '@/lib/telegram'
 import { validateConfig } from '@/config/telegram'
 import { MainLayout } from '@/layouts'
-import { FullPageError } from '@/components/ui'
+import { FullPageError, UpdatePrompt } from '@/components/ui'
 import { MessageCircle } from 'lucide-solid'
 
 import {
@@ -202,8 +202,10 @@ export function App() {
   })
 
   return (
-    <ErrorBoundary
-      fallback={(err) => {
+    <>
+      <UpdatePrompt />
+      <ErrorBoundary
+        fallback={(err) => {
         console.error('[App] Error caught by boundary:', err)
         // On cleanNode errors during navigation, just redirect to home
         // Check for various manifestations of this SolidJS cleanup error
@@ -243,7 +245,8 @@ export function App() {
           <Route path="*" component={NotFound} />
         </Router>
       </QueryClientProvider>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </>
   )
 }
 
