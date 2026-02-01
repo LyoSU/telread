@@ -51,8 +51,9 @@ export function usePost(
       },
       // Instant display from store - no loading state if data exists
       initialData: cachedPost,
-      // Don't refetch if we have fresh data from store
-      staleTime: cachedPost ? 1000 * 60 * 30 : 0, // 30 min if cached, 0 if not
+      // Tell TanStack Query the cached data is fresh (just loaded from timeline)
+      initialDataUpdatedAt: cachedPost ? Date.now() : undefined,
+      staleTime: 1000 * 60 * 30, // 30 minutes
       enabled: enabled?.() ?? true,
       refetchOnMount: false,
     }
