@@ -187,19 +187,42 @@ function GalleryModal(props: {
   const goToPrev = () => setCurrentIndex((i) => Math.max(0, i - 1))
   const goToNext = () => setCurrentIndex((i) => Math.min(props.items.length - 1, i + 1))
 
+  // Track if closed by back button
+  let closedByBackButton = false
+
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') props.onClose()
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      closeModal()
+    }
     if (e.key === 'ArrowLeft') goToPrev()
     if (e.key === 'ArrowRight') goToNext()
+  }
+
+  const handlePopState = () => {
+    closedByBackButton = true
+    props.onClose()
+  }
+
+  const closeModal = () => {
+    if (!closedByBackButton) {
+      history.back()
+    }
+    props.onClose()
   }
 
   onMount(() => {
     document.addEventListener('keydown', handleKeyDown)
     document.body.style.overflow = 'hidden'
+    
+    // Push fake history entry so back button closes modal
+    history.pushState({ modal: 'gallery' }, '')
+    window.addEventListener('popstate', handlePopState)
   })
 
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeyDown)
+    window.removeEventListener('popstate', handlePopState)
     document.body.style.overflow = ''
   })
 
@@ -217,14 +240,14 @@ function GalleryModal(props: {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       class="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center"
-      onClick={props.onClose}
+      onClick={closeModal}
     >
       {/* Close button */}
       <button
         type="button"
         aria-label="Close"
         class="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors z-10"
-        onClick={props.onClose}
+        onClick={closeModal}
       >
         <X size={32} />
       </button>

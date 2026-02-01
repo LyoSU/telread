@@ -6,7 +6,7 @@ import type { MessageMedia } from '@/lib/telegram'
 import { useMedia } from '@/lib/query'
 import { mediaController } from '@/lib/media'
 import { Skeleton } from '@/components/ui'
-import { Play, Pause, FileText, Music, MapPin, User, ExternalLink, X, Maximize2, Volume2, VolumeX } from 'lucide-solid'
+import { Play, Pause, FileText, Music, MapPin, User, ExternalLink, X, Volume2, VolumeX } from 'lucide-solid'
 
 interface PostMediaProps {
   channelId: number
@@ -915,13 +915,11 @@ function InlineVideoPlayer(props: {
   
   const [isPlaying, setIsPlaying] = createSignal(false)
   const [isMuted, setIsMuted] = createSignal(true)
-  const [showControls, setShowControls] = createSignal(true)
   const [isLoaded, setIsLoaded] = createSignal(false)
   const [isInViewport, setIsInViewport] = createSignal(false)
   const [userPaused, setUserPaused] = createSignal(false)
   
   let videoRef: HTMLVideoElement | undefined
-  let hideControlsTimeout: number | undefined
   let visibilityObserver: IntersectionObserver | undefined
   let unregister: (() => void) | undefined
 
@@ -976,49 +974,24 @@ function InlineVideoPlayer(props: {
     })
   }
 
+  // Tap on video = open fullscreen (like Telegram)
   const handleVideoClick = (e: MouseEvent) => {
     e.stopPropagation()
-    if (!videoRef) return
-    
-    if (isPlaying()) {
-      mediaController.pause(mediaId)
-      setUserPaused(true) // User manually paused
-    } else {
-      setUserPaused(false)
-      mediaController.play(mediaId)
-    }
-    
-    // Show controls briefly
-    setShowControls(true)
-    clearTimeout(hideControlsTimeout)
-    hideControlsTimeout = window.setTimeout(() => {
-      if (isPlaying()) setShowControls(false)
-    }, 2000)
+    mediaController.pause(mediaId)
+    setUserPaused(true)
+    props.onExpand()
   }
 
+  // Mute button - quick unmute without opening fullscreen
   const handleMuteClick = (e: MouseEvent) => {
     e.stopPropagation()
     if (!videoRef) return
     
     const nowUnmuted = mediaController.toggleMute(mediaId)
     setIsMuted(!nowUnmuted)
-    
-    // Keep controls visible when interacting
-    setShowControls(true)
-    clearTimeout(hideControlsTimeout)
-    hideControlsTimeout = window.setTimeout(() => {
-      if (isPlaying()) setShowControls(false)
-    }, 2000)
-  }
-
-  const handleExpand = (e: MouseEvent) => {
-    e.stopPropagation()
-    mediaController.pause(mediaId)
-    props.onExpand()
   }
 
   onCleanup(() => {
-    clearTimeout(hideControlsTimeout)
     visibilityObserver?.disconnect()
     unregister?.()
   })
@@ -1026,8 +999,9 @@ function InlineVideoPlayer(props: {
   return (
     <div 
       ref={setupContainer}
-      class="relative rounded-2xl overflow-hidden flex-shrink-0 shadow-sm hover:shadow-md transition-shadow bg-black" 
+      class="relative rounded-2xl overflow-hidden flex-shrink-0 shadow-sm hover:shadow-md transition-shadow bg-black cursor-pointer" 
       style={props.containerStyle}
+      onClick={handleVideoClick}
     >
       {/* Video element */}
       <Show when={videoQuery.data}>
@@ -1035,10 +1009,9 @@ function InlineVideoPlayer(props: {
           <video
             ref={setupVideo}
             src={url()}
-            class="w-full h-full object-cover cursor-pointer"
+            class="w-full h-full object-cover"
             playsinline
             muted
-            onClick={handleVideoClick}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onEnded={() => setIsPlaying(false)}
@@ -1065,57 +1038,39 @@ function InlineVideoPlayer(props: {
         </Show>
       </Show>
 
-      {/* Play/Pause overlay - only when paused */}
-      <Show when={!isPlaying() && videoQuery.data}>
-        <div
-          class="absolute inset-0 flex items-center justify-center bg-black/30 cursor-pointer"
-          onClick={handleVideoClick}
-        >
+      {/* Play icon overlay - tap anywhere to open fullscreen */}
+      <Show when={!isPlaying()}>
+        <div class="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
           <div class="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
             <Play size={28} class="text-gray-900 ml-1" fill="currentColor" />
           </div>
         </div>
       </Show>
 
-      {/* Controls overlay */}
-      <Show when={showControls() || !isPlaying()}>
-        <div class="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent">
-          <div class="flex items-center justify-between">
-            {/* Mute/Unmute button */}
-            <button
-              type="button"
-              aria-label={isMuted() ? 'Unmute' : 'Mute'}
-              onClick={handleMuteClick}
-              class="p-1.5 rounded-lg bg-black/40 text-white/90 hover:text-white backdrop-blur-sm
-                     transition-colors focus:outline-none"
-            >
-              <Show when={isMuted()} fallback={<Volume2 size={18} />}>
-                <VolumeX size={18} />
-              </Show>
-            </button>
-            
-            <div class="flex items-center gap-1.5">
-              {/* Duration badge */}
-              <Show when={props.media.duration !== undefined}>
-                <div class="px-2 py-1 rounded-lg bg-black/40 text-white text-xs font-medium backdrop-blur-sm">
-                  {formatDuration(props.media.duration!)}
-                </div>
-              </Show>
-              
-              {/* Expand button */}
-              <button
-                type="button"
-                aria-label="Fullscreen"
-                onClick={handleExpand}
-                class="p-1.5 rounded-lg bg-black/40 text-white/80 hover:text-white backdrop-blur-sm
-                       transition-colors focus:outline-none"
-              >
-                <Maximize2 size={16} />
-              </button>
+      {/* Bottom controls */}
+      <div class="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/60 to-transparent">
+        <div class="flex items-center justify-between">
+          {/* Mute/Unmute button */}
+          <button
+            type="button"
+            aria-label={isMuted() ? 'Unmute' : 'Mute'}
+            onClick={handleMuteClick}
+            class="p-1.5 rounded-lg bg-black/40 text-white/90 hover:text-white backdrop-blur-sm
+                   transition-colors focus:outline-none"
+          >
+            <Show when={isMuted()} fallback={<Volume2 size={18} />}>
+              <VolumeX size={18} />
+            </Show>
+          </button>
+          
+          {/* Duration badge */}
+          <Show when={props.media.duration !== undefined}>
+            <div class="px-2 py-1 rounded-lg bg-black/40 text-white text-xs font-medium backdrop-blur-sm">
+              {formatDuration(props.media.duration!)}
             </div>
-          </div>
+          </Show>
         </div>
-      </Show>
+      </div>
     </div>
   )
 }
@@ -1218,19 +1173,41 @@ function MediaModal(props: {
     () => undefined
   )
 
-  // Close on escape
+  // Track if closed by back button to avoid double history.back()
+  let closedByBackButton = false
+
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') props.onClose()
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      closeModal()
+    }
   }
 
-  // Setup event listeners with proper cleanup
+  const handlePopState = () => {
+    closedByBackButton = true
+    props.onClose()
+  }
+
+  const closeModal = () => {
+    // Remove our history entry before closing
+    if (!closedByBackButton) {
+      history.back()
+    }
+    props.onClose()
+  }
+
   onMount(() => {
     document.addEventListener('keydown', handleKeyDown)
     document.body.style.overflow = 'hidden'
+    
+    // Push fake history entry so back button closes modal
+    history.pushState({ modal: 'media' }, '')
+    window.addEventListener('popstate', handlePopState)
   })
 
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeyDown)
+    window.removeEventListener('popstate', handlePopState)
     document.body.style.overflow = ''
   })
 
@@ -1242,7 +1219,7 @@ function MediaModal(props: {
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       class="fixed inset-0 z-[9999] bg-black flex items-center justify-center"
-      onClick={props.onClose}
+      onClick={closeModal}
     >
       {/* Close button */}
       <button
@@ -1250,7 +1227,7 @@ function MediaModal(props: {
         aria-label="Close"
         class="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors z-20
                focus:outline-none focus:ring-2 focus:ring-white"
-        onClick={props.onClose}
+        onClick={closeModal}
       >
         <X size={32} />
       </button>
@@ -1284,7 +1261,7 @@ function MediaModal(props: {
             isLoading={fullQuery.isLoading}
             duration={props.media.duration ?? 0}
             isRound={props.media.type === 'video_note'}
-            onClose={props.onClose}
+            onClose={closeModal}
           />
         </Show>
       </div>

@@ -35,7 +35,6 @@ export function GlassModal(props: GlassModalProps) {
   const [dragY, setDragY] = createSignal(0)
   const [isDragging, setIsDragging] = createSignal(false)
   let startY = 0
-  let sheetRef: HTMLDivElement | undefined
 
   const isSheet = () => props.variant !== 'center'
 
@@ -149,7 +148,6 @@ export function GlassModal(props: GlassModalProps) {
             {/* Bottom sheet variant */}
             <div class="fixed inset-x-0 bottom-0 z-50 pointer-events-none">
               <Motion.div
-                ref={sheetRef}
                 initial={{ y: '100%' }}
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
@@ -162,8 +160,8 @@ export function GlassModal(props: GlassModalProps) {
                   safe-bottom
                 `}
                 style={{
-                  transform: isDragging() ? `translateY(${dragY()}px)` : undefined,
-                  transition: isDragging() ? 'none' : undefined,
+                  transform: dragY() > 0 ? `translateY(${dragY()}px)` : undefined,
+                  transition: isDragging() ? 'none' : 'transform 0.2s ease-out',
                 }}
                 onClick={(e) => e.stopPropagation()}
                 onTouchStart={handleTouchStart}
