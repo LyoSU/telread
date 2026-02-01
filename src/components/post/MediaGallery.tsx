@@ -1,7 +1,8 @@
-import { For, Show, createSignal, onCleanup, onMount } from 'solid-js'
-import { Motion } from 'solid-motionone'
+import { For, Show, createSignal, createMemo, onCleanup } from 'solid-js'
+import { Portal } from 'solid-js/web'
 import { useMedia } from '@/lib/query'
-import { Play, X, ChevronLeft, ChevronRight } from 'lucide-solid'
+import { VideoModal, Lightbox, type LightboxItem } from '@/components/ui'
+import { Play } from 'lucide-solid'
 import type { MessageMedia } from '@/lib/telegram'
 
 interface MediaItem {
@@ -18,9 +19,95 @@ interface MediaGalleryProps {
 /**
  * Media gallery for albums (grouped posts)
  * Threads-style horizontal scrolling row
+ * Uses PhotoSwipe for photo viewing, VideoModal for videos
  */
 export function MediaGallery(props: MediaGalleryProps) {
   const [expandedIndex, setExpandedIndex] = createSignal<number | null>(null)
+  const [lightboxOpen, setLightboxOpen] = createSignal(false)
+  const [lightboxIndex, setLightboxIndex] = createSignal(0)
+
+  // Separate photo items for Lightbox navigation
+  const photoItems = createMemo(() => 
+    props.items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.media.type === 'photo')
+  )
+
+  // Map gallery index to lightbox index
+  const galleryToLightboxIndex = createMemo(() => {
+    const map = new Map<number, number>()
+    photoItems().forEach(({ index }, lightboxIdx) => {
+      map.set(index, lightboxIdx)
+    })
+    return map
+  })
+
+  // Derived: expanded item data (for videos only now)
+  const expandedItem = createMemo(() => {
+    const idx = expandedIndex()
+    return idx !== null ? props.items[idx] : null
+  })
+  
+  const isExpandedVideo = createMemo(() => {
+    const item = expandedItem()
+    if (!item) return false
+    return item.media.type === 'video' || item.media.type === 'animation'
+  })
+
+  // Load full resolution for expanded video
+  const expandedMediaQuery = useMedia(
+    () => expandedItem()?.channelId ?? 0,
+    () => expandedItem()?.messageId ?? 0,
+    () => undefined,
+    () => expandedIndex() !== null && isExpandedVideo()
+  )
+
+  // Load full resolution for all photos in lightbox
+  const photoMediaQueries = photoItems().map(({ item }) => 
+    useMedia(
+      () => item.channelId,
+      () => item.messageId,
+      () => undefined,
+      lightboxOpen
+    )
+  )
+
+  // Build lightbox items from loaded photos
+  const lightboxItems = createMemo((): LightboxItem[] => {
+    return photoItems().map(({ item }, idx) => {
+      const query = photoMediaQueries[idx]
+      return {
+        src: query?.data || item.media.thumb || '',
+        width: item.media.width || 1200,
+        height: item.media.height || 800,
+        thumb: item.media.thumb,
+      }
+    })
+  })
+
+  const handleItemClick = (index: number) => {
+    const item = props.items[index]
+    
+    if (item.media.type === 'photo') {
+      // Open PhotoSwipe for photos
+      const lbIndex = galleryToLightboxIndex().get(index)
+      if (lbIndex !== undefined) {
+        setLightboxIndex(lbIndex)
+        setLightboxOpen(true)
+      }
+    } else {
+      // Open VideoModal for videos/animations
+      setExpandedIndex(index)
+    }
+  }
+
+  const closeVideoModal = () => {
+    setExpandedIndex(null)
+  }
+
+  const closeLightbox = () => {
+    setLightboxOpen(false)
+  }
 
   return (
     <div class={`relative ${props.class ?? ''}`}>
@@ -30,19 +117,29 @@ export function MediaGallery(props: MediaGalleryProps) {
           {(item, index) => (
             <GalleryItem
               item={item}
-              onClick={() => setExpandedIndex(index())}
+              onClick={() => handleItemClick(index())}
             />
           )}
         </For>
       </div>
 
-      {/* Fullscreen modal */}
-      <Show when={expandedIndex() !== null}>
-        <GalleryModal
-          items={props.items}
-          initialIndex={expandedIndex()!}
-          onClose={() => setExpandedIndex(null)}
-        />
+      {/* PhotoSwipe lightbox for photos */}
+      <Lightbox
+        items={lightboxItems()}
+        index={lightboxIndex()}
+        open={lightboxOpen()}
+        onClose={closeLightbox}
+      />
+
+      {/* VideoModal for videos */}
+      <Show when={expandedIndex() !== null && isExpandedVideo()}>
+        <Portal>
+          <VideoModal
+            url={expandedMediaQuery.data}
+            isLoading={expandedMediaQuery.isLoading}
+            onClose={closeVideoModal}
+          />
+        </Portal>
       </Show>
     </div>
   )
@@ -60,7 +157,7 @@ function GalleryItem(props: {
 
   const isAnimation = () => props.item.media.type === 'animation'
 
-  // Load full resolution (animations need full, others need large)
+  // Load large thumbnail for inline display
   const mediaQuery = useMedia(
     () => props.item.channelId,
     () => props.item.messageId,
@@ -71,7 +168,6 @@ function GalleryItem(props: {
   const setupObserver = (el: HTMLDivElement) => {
     observer = new IntersectionObserver(
       (entries) => {
-        // Check observer still exists (not cleaned up)
         if (entries[0]?.isIntersecting && observer) {
           observer.disconnect()
           observer = undefined
@@ -100,12 +196,11 @@ function GalleryItem(props: {
       ? 'video' 
       : 'image'
 
-  // Calculate width based on aspect ratio for fixed height
   const aspectRatio = () => {
     const w = props.item.media.width
     const h = props.item.media.height
     if (w && h && h > 0) return w / h
-    return 1 // Square fallback
+    return 1
   }
 
   return (
@@ -122,7 +217,6 @@ function GalleryItem(props: {
       }}
       onKeyDown={handleKeyDown}
     >
-      {/* Full media (shows when loaded) */}
       <Show when={mediaQuery.data}>
         {(url) => (
           <Show
@@ -136,7 +230,6 @@ function GalleryItem(props: {
               />
             }
           >
-            {/* GIF/Animation plays inline */}
             <video
               src={url()}
               class="w-full h-full object-cover"
@@ -148,14 +241,13 @@ function GalleryItem(props: {
           </Show>
         )}
       </Show>
-      {/* Inline thumbnail with blur (shows while full loads) */}
+      
       <Show when={!mediaQuery.data}>
         <Show when={props.item.media.thumb} fallback={<div class="absolute inset-0 skeleton" />}>
           <img src={props.item.media.thumb} alt="" class="absolute inset-0 w-full h-full object-cover blur-sm scale-105" />
         </Show>
       </Show>
 
-      {/* Video indicator - only for actual videos, not GIFs */}
       <Show when={props.item.media.type === 'video'}>
         <div class="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
           <div class="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center">
@@ -164,131 +256,5 @@ function GalleryItem(props: {
         </div>
       </Show>
     </div>
-  )
-}
-
-/**
- * Fullscreen gallery modal with navigation
- */
-function GalleryModal(props: {
-  items: MediaItem[]
-  initialIndex: number
-  onClose: () => void
-}) {
-  const [currentIndex, setCurrentIndex] = createSignal(props.initialIndex)
-
-  const currentItem = () => props.items[currentIndex()]
-  const canGoPrev = () => currentIndex() > 0
-  const canGoNext = () => currentIndex() < props.items.length - 1
-
-  const goToPrev = () => setCurrentIndex((i) => Math.max(0, i - 1))
-  const goToNext = () => setCurrentIndex((i) => Math.min(props.items.length - 1, i + 1))
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') props.onClose()
-    if (e.key === 'ArrowLeft') goToPrev()
-    if (e.key === 'ArrowRight') goToNext()
-  }
-
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown)
-    document.body.style.overflow = 'hidden'
-  })
-
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown)
-    document.body.style.overflow = ''
-  })
-
-  // Load full resolution for current item - query handles cleanup
-  // Guard against empty items array
-  const fullQuery = useMedia(
-    () => currentItem()?.channelId ?? 0,
-    () => currentItem()?.messageId ?? 0,
-    () => undefined
-  )
-
-  return (
-    <Motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      class="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center"
-      onClick={props.onClose}
-    >
-      {/* Close button */}
-      <button
-        type="button"
-        aria-label="Close"
-        class="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors z-10"
-        onClick={props.onClose}
-      >
-        <X size={32} />
-      </button>
-
-      {/* Counter */}
-      <div class="absolute top-4 left-4 text-white/70 text-sm z-10">
-        {currentIndex() + 1} / {props.items.length}
-      </div>
-
-      {/* Navigation buttons */}
-      <Show when={canGoPrev()}>
-        <button
-          type="button"
-          aria-label="Previous"
-          class="absolute left-4 top-1/2 -translate-y-1/2 p-3 text-white/70 hover:text-white transition-colors z-10"
-          onClick={(e) => { e.stopPropagation(); goToPrev() }}
-        >
-          <ChevronLeft size={32} />
-        </button>
-      </Show>
-
-      <Show when={canGoNext()}>
-        <button
-          type="button"
-          aria-label="Next"
-          class="absolute right-4 top-1/2 -translate-y-1/2 p-3 text-white/70 hover:text-white transition-colors z-10"
-          onClick={(e) => { e.stopPropagation(); goToNext() }}
-        >
-          <ChevronRight size={32} />
-        </button>
-      </Show>
-
-      {/* Media content */}
-      <div
-        class="w-full h-full flex items-center justify-center p-4"
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <Show
-          when={fullQuery.data}
-          fallback={
-            <div class="animate-spin w-8 h-8 border-2 border-white border-t-transparent rounded-full" />
-          }
-        >
-          {(url) => (
-            <Show
-              when={currentItem().media.type === 'video' || currentItem().media.type === 'animation'}
-              fallback={
-                <img
-                  src={url()}
-                  alt=""
-                  class="max-w-full max-h-full object-contain"
-                />
-              }
-            >
-              <video
-                src={url()}
-                class="max-w-full max-h-full"
-                controls
-                autoplay
-                muted={currentItem().media.type === 'animation'}
-                loop={currentItem().media.type === 'animation'}
-              />
-            </Show>
-          )}
-        </Show>
-      </div>
-    </Motion.div>
   )
 }

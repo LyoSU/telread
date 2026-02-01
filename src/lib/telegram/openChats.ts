@@ -12,6 +12,7 @@
  * It uses visibility tracking to prioritize channels the user is currently viewing.
  */
 import { getTelegramClient, isClientReady } from './client'
+import { isChannelInvalid } from './errors'
 import { getTime } from '@/lib/utils'
 
 /**
@@ -75,7 +76,10 @@ export async function openChannel(channelId: number): Promise<boolean> {
   const client = getTelegramClient()
 
   try {
-    await client.openChat(channelId)
+    // Resolve peer first to ensure it's in the client's cache with access_hash
+    // Without this, openChat may fail with CHANNEL_INVALID for channels not in cache
+    const peer = await client.resolvePeer(channelId)
+    await client.openChat(peer)
     openChannels.add(channelId)
     
     if (import.meta.env.DEV) {
@@ -83,7 +87,9 @@ export async function openChannel(channelId: number): Promise<boolean> {
     }
     return true
   } catch (error) {
-    if (import.meta.env.DEV) {
+    // Silently ignore invalid/inaccessible channels - they may have been deleted
+    // or user may have left them
+    if (!isChannelInvalid(error) && import.meta.env.DEV) {
       console.warn(`[OpenChats] Failed to open channel ${channelId}:`, error)
     }
     return false

@@ -930,7 +930,9 @@ function buildCommentTree(comments: Comment[]): Comment[] {
     if (parent) {
       // Resolve reply-to author from parent comment
       comment.replyToAuthor = { name: parent.author.name }
-      parent.replies!.push(comment)
+      // replies is initialized in commentsCopy above, but use defensive check
+      if (!parent.replies) parent.replies = []
+      parent.replies.push(comment)
     } else {
       // This is either a root comment or an orphaned reply
       // We treat orphaned replies as root comments

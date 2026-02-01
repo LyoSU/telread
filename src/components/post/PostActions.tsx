@@ -1,7 +1,7 @@
 import { Show, For, createMemo } from 'solid-js'
 import { bookmarksStore, postsState } from '@/lib/store'
 import { useSendReaction } from '@/lib/query'
-import { formatCount } from '@/lib/utils'
+import { formatCount, haptic } from '@/lib/utils'
 import { MessageCircle, Eye, Bookmark } from 'lucide-solid'
 import type { MessageReaction } from '@/lib/telegram'
 
@@ -29,6 +29,7 @@ export function PostActions(props: PostActionsProps) {
     bookmarksStore.isBookmarked(props.channelId, props.messageId)
 
   const handleBookmark = () => {
+    haptic(isBookmarked() ? 'light' : 'medium')
     bookmarksStore.toggleBookmark(
       props.channelId,
       props.messageId,
@@ -50,6 +51,7 @@ export function PostActions(props: PostActionsProps) {
   )
 
   const handleReactionClick = (emoji: string) => {
+    haptic('light')
     // Toggle the reaction - preserves other chosen reactions
     sendReactionMutation.mutate({
       channelId: props.channelId,

@@ -13,47 +13,59 @@ export type TimelineItem =
  * Posts with the same groupedId are combined into a single timeline item.
  * The first post in the group provides the text/metadata, others provide media.
  *
- * Optimized O(n) implementation using a single pass with Map
+ * Two-pass O(n) implementation:
+ * 1. Collect groups by groupedId
+ * 2. Build result array preserving order
  */
 export function groupPostsByMediaGroup(posts: Message[]): TimelineItem[] {
-  const result: TimelineItem[] = []
-  const groupMap = new Map<string, { posts: Message[]; index: number }>()
+  // First pass: collect groups
+  const groupMap = new Map<string, Message[]>()
+  const orderKeys: Array<{ type: 'single'; post: Message } | { type: 'group'; key: string }> = []
+  const seenGroups = new Set<string>()
 
-  // Single pass: categorize posts
-  for (let i = 0; i < posts.length; i++) {
-    const post = posts[i]
-
-    // If no groupedId, it's a single post
+  for (const post of posts) {
     if (!post.groupedId) {
-      result.push({ type: 'single', post })
+      // Single post - add directly to order
+      orderKeys.push({ type: 'single', post })
       continue
     }
 
-    const groupIdStr = post.groupedId.toString()
-
-    if (!groupMap.has(groupIdStr)) {
-      // First post of this group - reserve a spot in result
-      const index = result.length
-      result.push(null as any) // Placeholder, will be replaced
-      groupMap.set(groupIdStr, { posts: [post], index })
+    const groupKey = post.groupedId.toString()
+    
+    // Add to group
+    const existing = groupMap.get(groupKey)
+    if (existing) {
+      existing.push(post)
     } else {
-      // Add to existing group
-      groupMap.get(groupIdStr)!.posts.push(post)
+      groupMap.set(groupKey, [post])
+    }
+
+    // Track first occurrence in order
+    if (!seenGroups.has(groupKey)) {
+      seenGroups.add(groupKey)
+      orderKeys.push({ type: 'group', key: groupKey })
     }
   }
 
-  // Fill in the group placeholders
-  for (const [, { posts: groupPosts, index }] of groupMap) {
-    // Sort by message ID to maintain order within album
-    groupPosts.sort((a, b) => a.id - b.id)
-
-    if (groupPosts.length === 1) {
-      result[index] = { type: 'single', post: groupPosts[0] }
+  // Second pass: build result
+  const result: TimelineItem[] = []
+  
+  for (const item of orderKeys) {
+    if (item.type === 'single') {
+      result.push({ type: 'single', post: item.post })
     } else {
-      result[index] = {
-        type: 'group',
-        posts: groupPosts,
-        groupedId: groupPosts[0].groupedId!,
+      const groupPosts = groupMap.get(item.key)!
+      // Sort by message ID to maintain order within album
+      groupPosts.sort((a, b) => a.id - b.id)
+
+      if (groupPosts.length === 1) {
+        result.push({ type: 'single', post: groupPosts[0] })
+      } else {
+        result.push({
+          type: 'group',
+          posts: groupPosts,
+          groupedId: groupPosts[0].groupedId!,
+        })
       }
     }
   }

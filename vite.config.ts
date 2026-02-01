@@ -6,10 +6,13 @@ import path from 'path'
 export default defineConfig({
   // For GitHub Pages without custom domain, set VITE_BASE=/repo-name/
   base: process.env.VITE_BASE || '/',
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     solid(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       includeAssets: ['favicon.ico', 'icons/*.png', 'robots.txt'],
       manifest: {
         name: 'TelRead - Telegram Reader',
@@ -48,9 +51,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,wasm}'],
-        // Skip waiting - activate new SW immediately
-        skipWaiting: true,
-        clientsClaim: true,
+        // User controls when to apply updates
         runtimeCaching: [
           // Google Fonts stylesheets
           {

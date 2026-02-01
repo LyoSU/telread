@@ -13,15 +13,16 @@ import { getTime } from '@/lib/utils'
 
 /**
  * Maximum posts to keep in memory
- * ~150 posts * ~2KB average = ~300KB
+ * ~300 posts * ~2KB average = ~600KB
+ * Enough for smooth scrolling without heavy RAM usage
  */
-const MAX_POSTS = 150
+const MAX_POSTS = 300
 
 /**
  * Maximum pending posts before auto-reveal
  * Prevents unbounded growth if user never clicks "new posts"
  */
-const MAX_PENDING = 50
+const MAX_PENDING = 100
 
 type PostKey = string
 
@@ -148,10 +149,7 @@ export function upsertPost(post: Message): void {
         // Post is older than top → add directly to sorted (no button)
         s.sortedKeys = insertSorted(s.sortedKeys, key, s.byId)
         trimToMaxPosts(s)
-        
-        if (import.meta.env.DEV) {
-          console.log(`[Posts] Old post inserted directly (date: ${post.date}, top: ${topPost?.date})`)
-        }
+        // Note: Not logging individual old posts to reduce noise during catch-up
       }
     }
   }))

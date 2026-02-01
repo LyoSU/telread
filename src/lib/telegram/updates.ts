@@ -19,7 +19,7 @@ import {
   upsertChannel,
 } from '@/lib/store'
 import { addPostsToCache, removePostsFromCache } from '@/lib/query/hooks'
-import type { Message as TgMessage, RawUpdateInfo, Chat } from '@mtcute/web'
+import type { Message as TgMessage, RawUpdateInfo, Chat, tl } from '@mtcute/web'
 
 
 
@@ -37,8 +37,9 @@ const pendingMessages: TgMessage[] = []
 // Batched Updates Processing
 // ============================================================================
 
-// Reduced from 300ms to 150ms for faster response on mobile
-const BATCH_INTERVAL_MS = 150
+// Balance between responsiveness and battery usage
+// 100ms = ~10 batches/sec max during heavy updates, idle when no updates
+const BATCH_INTERVAL_MS = 100
 
 interface UpdateBatch {
   messages: TgMessage[]
@@ -88,7 +89,8 @@ function processBatch(): void {
     uniqueByKey.set(key, msg)
   }
 
-  // Filter to channel messages and map
+  // Filter to broadcast channel messages and map
+  // Note: supergroups are handled separately via handleCommentMessage
   const mapped: Message[] = []
   let skippedNonChannel = 0
   let skippedNoContent = 0
@@ -101,10 +103,9 @@ function processBatch(): void {
     }
     const chat = peer as Chat
 
-    // Accept both broadcast channels AND supergroups (channels with comments)
-    // chatType can be: 'channel' (broadcast), 'supergroup', 'gigagroup'
-    const isChannel = chat.chatType === 'channel' || chat.chatType === 'supergroup' || chat.chatType === 'gigagroup'
-    if (!isChannel) {
+    // Only process broadcast channels (chatType === 'channel')
+    // Supergroups/gigagroups are discussion groups, handled via comment handlers
+    if (chat.chatType !== 'channel') {
       skippedNonChannel++
       continue
     }
@@ -114,7 +115,7 @@ function processBatch(): void {
       const channel = mapChatToChannel(chat)
       upsertChannel(channel)
       if (import.meta.env.DEV) {
-        console.log(`[Updates] Discovered channel via update: ${peer.id} "${chat.title}" (${chat.chatType})`)
+        console.log(`[Updates] Discovered channel via update: ${peer.id} "${chat.title}"`)
       }
     }
 
@@ -123,6 +124,10 @@ function processBatch(): void {
       mapped.push(post)
     } else {
       skippedNoContent++
+      if (import.meta.env.DEV) {
+        // Log why message was skipped (service message, etc.)
+        console.log(`[Updates] Skipped message ${msg.id} in ${peer.id}: no text/media (service message?)`)
+      }
     }
   }
 
@@ -317,23 +322,19 @@ export function startUpdatesListener(): UpdatesCleanup {
       const chatId = message.chat?.id
       if (!chatId) return
 
-      // Queue if store not ready yet
-      if (!isStoreReady()) {
-        pendingMessages.push(message)
-        return
-      }
-
       const peer = message.chat
       if (!peer || peer.type !== 'chat') return
       const chat = peer as Chat
 
       // Handle channel posts
       if (chat.chatType === 'channel') {
+        // Queue channel messages - processBatch handles store readiness
         queueMessage(message)
         return
       }
 
       // Handle discussion group messages (comments)
+      // Comments don't need store to be ready - they have separate state
       if (chat.chatType === 'supergroup') {
         handleCommentEdit(message)
         return
@@ -373,7 +374,7 @@ export function startUpdatesListener(): UpdatesCleanup {
     if (getClientVersion() !== listenerClientVersion) return
 
     try {
-      const update = info.update as any
+      const update = info.update as tl.TypeUpdate
 
       // Handle folder updates (created, deleted, reordered)
       if (
@@ -420,7 +421,7 @@ export function startUpdatesListener(): UpdatesCleanup {
           )
 
           const reactions: MessageReaction[] = []
-          for (const r of update.reactions.results as any[]) {
+          for (const r of update.reactions.results) {
             if (r.count <= 0) continue
             // Skip paid reactions (stars)
             if (r.reaction?._ === 'reactionPaid') continue

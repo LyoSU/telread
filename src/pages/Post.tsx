@@ -181,8 +181,8 @@ function Post() {
           {/* Header */}
           <div class="post-header cursor-pointer" onClick={handleChannelClick}>
             <ChannelAvatar channelId={channelId()} name={channel()!.title} size="md" />
-            <div class="flex-1 min-w-0">
-              <p class="font-semibold text-primary hover:underline truncate">
+            <div class="flex-1 min-w-0 overflow-hidden">
+              <p class="font-semibold text-primary hover:underline truncate max-w-full">
                 {channel()!.title}
               </p>
               <p class="text-sm text-tertiary">

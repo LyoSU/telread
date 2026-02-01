@@ -2,7 +2,7 @@ import { getTelegramClient, isClientReady } from './client'
 import { MEDIA_CACHE_MAX_SIZE } from '@/config/constants'
 import { get, set, del, keys } from 'idb-keyval'
 import type { Photo, Video, Document, Sticker, Audio, Voice, WebPageMedia } from '@mtcute/web'
-import { isChannelInvalid, isFileReferenceExpired } from './errors'
+import { isChannelInvalid, isFileReferenceExpired, isFloodWait } from './errors'
 
 // Union type for media that supports thumbnails
 type MediaWithThumbnails = Photo | Video | Document | Sticker | Audio | Voice
@@ -655,6 +655,12 @@ export async function downloadMedia(
         // Don't log - this is expected for cached posts from left channels
         return null
       }
+      // Handle FLOOD_WAIT - don't block UI, just skip and let React Query retry later
+      if (isFloodWait(error)) {
+        debugWarn(`Error downloading media: channel=${channelId}, msg=${messageId} RpcError: A wait of ${error.seconds} seconds is required`)
+        // Throw to allow React Query to handle retry with backoff
+        throw error
+      }
       debugWarn(`Error downloading media: channel=${channelId}, msg=${messageId}`, error)
     }
     return null
@@ -682,9 +688,6 @@ export async function downloadProfilePhoto(
   // Check in-memory cache first (non-evicting, blob URLs stay valid)
   const memCached = profilePhotoCache.get(cacheKey)
   if (memCached) {
-    if (import.meta.env.DEV) {
-      console.log(`[Avatar] ${peerId} from RAM cache`)
-    }
     return memCached
   }
 
@@ -692,22 +695,12 @@ export async function downloadProfilePhoto(
   // Note: getCachedProfilePhoto already stores in memory cache if found
   const persistedUrl = await getCachedProfilePhoto(peerId, size)
   if (persistedUrl) {
-    if (import.meta.env.DEV) {
-      console.log(`[Avatar] ${peerId} from IndexedDB cache`)
-    }
     return persistedUrl
   }
 
   // No cache - check if client is ready for API calls
   if (!isClientReady()) {
-    if (import.meta.env.DEV) {
-      console.log(`[Avatar] ${peerId} - client not ready, no cache`)
-    }
     throw new Error('Client not ready')
-  }
-  
-  if (import.meta.env.DEV) {
-    console.log(`[Avatar] ${peerId} - fetching from API`)
   }
 
   const client = getTelegramClient()
@@ -751,6 +744,11 @@ export async function downloadProfilePhoto(
     addToProfilePhotoCache(cacheKey, url)
     return url
   } catch (error) {
+    // Handle FLOOD_WAIT - throw to allow React Query to handle retry with backoff
+    if (isFloodWait(error)) {
+      debugWarn(`Failed to download profile photo: peer=${peerId} RpcError: A wait of ${error.seconds} seconds is required`)
+      throw error
+    }
     debugWarn(`Failed to download profile photo: peer=${peerId}`, error)
     return null
   } finally {

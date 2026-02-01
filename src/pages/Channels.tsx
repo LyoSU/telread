@@ -1,6 +1,5 @@
 import { For, Show, createSignal } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
-import { Motion } from 'solid-motionone'
 import { GlassCard, GlassButton, GlassInput, ChannelAvatar, Skeleton, InlineError } from '@/components/ui'
 import { useChannels, useJoinChannel } from '@/lib/query'
 import { formatCount } from '@/lib/utils'
@@ -125,42 +124,36 @@ function Channels() {
       <Show when={channelsQuery.data && channelsQuery.data.length > 0}>
         <div class="space-y-3">
           <For each={channelsQuery.data}>
-            {(channel, index) => (
-              <Motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index() * 0.05 }}
+            {(channel) => (
+              <GlassCard
+                class="p-4 cursor-pointer"
+                onClick={() => handleChannelClick(channel.id)}
+                hover
               >
-                <GlassCard
-                  class="p-4 cursor-pointer"
-                  onClick={() => handleChannelClick(channel.id)}
-                  hover
-                >
-                  <div class="flex items-center gap-3">
-                    <ChannelAvatar
-                      channelId={channel.id}
-                      name={channel.title}
-                      size="lg"
-                    />
-                    <div class="flex-1 min-w-0">
-                      <p class="font-semibold text-primary truncate">
-                        {channel.title}
+                <div class="flex items-center gap-3">
+                  <ChannelAvatar
+                    channelId={channel.id}
+                    name={channel.title}
+                    size="lg"
+                  />
+                  <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-primary truncate">
+                      {channel.title}
+                    </p>
+                    <Show when={channel.username}>
+                      <p class="text-sm text-secondary truncate">
+                        @{channel.username}
                       </p>
-                      <Show when={channel.username}>
-                        <p class="text-sm text-secondary truncate">
-                          @{channel.username}
-                        </p>
-                      </Show>
-                      <Show when={channel.participantsCount}>
-                        <p class="text-xs text-tertiary mt-1">
-                          {formatCount(channel.participantsCount!)} subscribers
-                        </p>
-                      </Show>
-                    </div>
-                    <ChevronRight size={20} class="text-tertiary flex-shrink-0" />
+                    </Show>
+                    <Show when={channel.participantsCount}>
+                      <p class="text-xs text-tertiary mt-1">
+                        {formatCount(channel.participantsCount!)} subscribers
+                      </p>
+                    </Show>
                   </div>
-                </GlassCard>
-              </Motion.div>
+                  <ChevronRight size={20} class="text-tertiary flex-shrink-0" />
+                </div>
+              </GlassCard>
             )}
           </For>
         </div>

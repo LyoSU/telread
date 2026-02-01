@@ -515,6 +515,8 @@ export async function fetchMoreHistory(
 // Helpers - exported for use in channels.ts and updates.ts
 
 export function mapMessage(msg: TgMessage, channelId: number): Message | null {
+  // Skip service messages (no text and no media)
+  // Examples: pinned message notifications, user joined, etc.
   if (!msg.text && !msg.media) {
     return null
   }
@@ -972,7 +974,7 @@ async function fetchGlobalReactions(): Promise<string[]> {
   const client = getTelegramClient()
 
   try {
-    const result = await (client as any).call({
+    const result = await client.call({
       _: 'messages.getAvailableReactions',
       hash: 0,
     })
@@ -983,22 +985,12 @@ async function fetchGlobalReactions(): Promise<string[]> {
 
     // Handle different response types
     if (result?._ === 'messages.availableReactions' && result.reactions) {
-      const reactions = result.reactions
-        .filter((r: any) => r._ === 'availableReaction' && !r.inactive)
-        .map((r: any) => {
-          // Try different ways to get the emoticon
-          if (typeof r.reaction === 'string') {
-            return r.reaction
-          }
-          if (r.reaction?.emoticon) {
-            return r.reaction.emoticon
-          }
-          if (r.reaction?._ === 'reactionEmoji') {
-            return r.reaction.emoticon
-          }
-          return null
-        })
-        .filter(Boolean) as string[]
+      const reactions: string[] = []
+      for (const r of result.reactions) {
+        if (r._ !== 'availableReaction' || r.inactive) continue
+        // r.reaction is the emoji string
+        reactions.push(r.reaction)
+      }
 
       if (reactions.length > 0) {
         if (import.meta.env.DEV) {
@@ -1050,19 +1042,19 @@ export async function getAvailableReactions(channelId: number): Promise<string[]
 
     // Channel has specific reactions allowed
     if (availableReactions?._ === 'chatReactionsSome') {
-      const reactions = availableReactions.reactions
-        ?.map((r: any) => {
-          if (typeof r === 'string') return r
-          if (r.emoticon) return r.emoticon
-          if (r._ === 'reactionEmoji') return r.emoticon
-          return null
-        })
-        .filter(Boolean) as string[]
+      const reactions: string[] = []
+      for (const r of availableReactions.reactions ?? []) {
+        // TypeReaction can be reactionEmoji, reactionCustomEmoji, or reactionPaid
+        if (r._ === 'reactionEmoji') {
+          reactions.push(r.emoticon)
+        }
+        // Skip custom emoji and paid reactions
+      }
 
       if (import.meta.env.DEV) {
         console.log('[getAvailableReactions] Specific reactions:', reactions)
       }
-      return reactions ?? fetchGlobalReactions()
+      return reactions.length > 0 ? reactions : fetchGlobalReactions()
     }
 
     // No config, chatReactionsAll, or unknown - use global reactions

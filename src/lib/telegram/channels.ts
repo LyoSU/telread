@@ -281,10 +281,19 @@ export async function getChannelFullInfo(channelId: number): Promise<ChannelFull
     // Get basic channel info
     const baseChannel = mapChatToChannel(chat)
 
-    // Get full channel info using mtcute's inputPeer
+    // Get full channel info - construct InputChannel from chat raw data
+    const raw = chat.raw
+    if (raw._ !== 'channel' || !raw.accessHash) {
+      return baseChannel
+    }
+    
     const fullResult = await client.call({
       _: 'channels.getFullChannel',
-      channel: chat.inputPeer as any,
+      channel: {
+        _: 'inputChannel',
+        channelId: raw.id,
+        accessHash: raw.accessHash,
+      },
     })
 
     // Extract full info from response
@@ -293,8 +302,7 @@ export async function getChannelFullInfo(channelId: number): Promise<ChannelFull
       return baseChannel
     }
 
-    // Get channel flags from raw
-    const raw = chat.raw
+    // Get channel flags from raw (already have raw from above)
     const isVerified = raw._ === 'channel' && raw.verified === true
     const isScam = raw._ === 'channel' && raw.scam === true
     const isFake = raw._ === 'channel' && raw.fake === true

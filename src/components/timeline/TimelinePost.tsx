@@ -90,10 +90,10 @@ export function TimelinePost(props: TimelinePostProps) {
             class="cursor-pointer"
           />
         </div>
-        <div class="flex-1 min-w-0">
+        <div class="flex-1 min-w-0 overflow-hidden">
           <button
             onClick={handleChannelClick}
-            class="font-semibold text-primary hover:underline truncate block"
+            class="font-semibold text-primary hover:underline truncate block max-w-full text-left"
           >
             {props.channelTitle}
           </button>

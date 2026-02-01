@@ -18,38 +18,46 @@ export function usePost(
   messageId: () => number,
   enabled?: () => boolean
 ) {
-  return createQuery(() => ({
-    queryKey: queryKeys.messages.detail(channelId(), messageId()),
-    queryFn: async () => {
-      const cid = channelId()
-      const mid = messageId()
-      
-      // 1. Check postsState (RAM)
-      const fromStore = getPost(cid, mid)
-      if (fromStore) return fromStore
-      
-      // 2. Check timeline cache - might have this post as lastMessage
-      const timelineData = queryClient.getQueryData<TimelineData>(queryKeys.timeline.all)
-      if (timelineData) {
-        const channel = timelineData.channels.find(c => c.id === cid)
-        if (channel?.lastMessage?.id === mid) {
-          // Also add to postsState for future access
-          upsertPosts([channel.lastMessage])
-          return channel.lastMessage
+  return createQuery(() => {
+    const cid = channelId()
+    const mid = messageId()
+    
+    // Check store synchronously for instant display
+    const cachedPost = getPost(cid, mid)
+    
+    return {
+      queryKey: queryKeys.messages.detail(cid, mid),
+      queryFn: async () => {
+        // Double-check store (may have been populated since query started)
+        const fromStore = getPost(cid, mid)
+        if (fromStore) return fromStore
+        
+        // Check timeline cache - might have this post as lastMessage
+        const timelineData = queryClient.getQueryData<TimelineData>(queryKeys.timeline.all)
+        if (timelineData) {
+          const channel = timelineData.channels.find(c => c.id === cid)
+          if (channel?.lastMessage?.id === mid) {
+            upsertPosts([channel.lastMessage])
+            return channel.lastMessage
+          }
         }
-      }
-      
-      // 3. Fallback to API
-      const post = await getMessage(cid, mid)
-      if (post) {
-        upsertPosts([post])
-      }
-      return post
-    },
-    enabled: enabled?.() ?? true,
-    staleTime: 1000 * 60 * 30, // 30 minutes
-    refetchOnMount: false, // Use cache if available
-  }))
+        
+        // Fallback to API
+        const post = await getMessage(cid, mid)
+        if (post) {
+          upsertPosts([post])
+        }
+        return post
+      },
+      // Instant display from store - no loading state if data exists
+      initialData: cachedPost,
+      // Tell TanStack Query the cached data is fresh (just loaded from timeline)
+      initialDataUpdatedAt: cachedPost ? Date.now() : undefined,
+      staleTime: 1000 * 60 * 30, // 30 minutes
+      enabled: enabled?.() ?? true,
+      refetchOnMount: false,
+    }
+  })
 }
 
 /**

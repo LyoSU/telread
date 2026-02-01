@@ -5,8 +5,11 @@ import type { tl } from '@mtcute/web'
 // Constants
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Cache TTL for dialog filters (10 seconds) */
-const FILTERS_CACHE_TTL_MS = 10_000
+/** Cache TTL for dialog filters (5 minutes - folders rarely change) */
+const FILTERS_CACHE_TTL_MS = 5 * 60 * 1000
+
+/** Cache TTL for folder channel IDs (5 minutes) */
+const FOLDER_CHANNELS_CACHE_TTL_MS = 5 * 60 * 1000
 
 /** Maximum dialogs to iterate when fetching broadcast channels */
 const MAX_DIALOGS_TO_ITERATE = 200
@@ -58,12 +61,23 @@ export interface FolderInfo {
     channelCount?: number
 }
 
+interface CacheEntry<T> {
+    data: T
+    timestamp: number
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Cache
 // ═══════════════════════════════════════════════════════════════════════════
 
 let filtersCache: DialogFilter[] | null = null
 let filtersCacheTime = 0
+
+/** Cache for channel IDs per folder */
+const folderChannelsCache = new Map<number, CacheEntry<number[]>>()
+
+/** Cache for broadcast channel IDs (expensive to compute) */
+let broadcastChannelsCache: CacheEntry<number[]> | null = null
 
 /**
  * Manually clear the folders cache
@@ -72,6 +86,8 @@ let filtersCacheTime = 0
 export function clearFoldersCache(): void {
     filtersCache = null
     filtersCacheTime = 0
+    folderChannelsCache.clear()
+    broadcastChannelsCache = null
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -134,11 +150,21 @@ export async function fetchDialogFilters(force: boolean = false): Promise<Dialog
 
 /**
  * Get list of channel IDs that belong to a specific folder
+ * Results are cached to avoid expensive API calls on every folder switch
  *
  * @param folderId - The folder ID to get channels from
  * @returns Array of channel IDs in this folder
  */
 export async function getChannelIdsInFolder(folderId: number): Promise<number[]> {
+    // Check cache first
+    const cached = folderChannelsCache.get(folderId)
+    if (cached && (Date.now() - cached.timestamp < FOLDER_CHANNELS_CACHE_TTL_MS)) {
+        if (import.meta.env.DEV) {
+            console.log(`[Folders] Using cached channel IDs for folder ${folderId}: ${cached.data.length} channels`)
+        }
+        return cached.data
+    }
+
     try {
         // Get all filters first
         const filters = await fetchDialogFilters()
@@ -156,14 +182,24 @@ export async function getChannelIdsInFolder(folderId: number): Promise<number[]>
             console.log(`[Folders] Folder "${folder.title}": ${folder.includePeers.length} included peers, broadcasts=${folder.broadcasts}`)
         }
 
+        let channelIds: number[]
+
         // If folder uses broadcasts flag, we need to get all channels
         // Otherwise use the explicit includePeers list
         if (folder.broadcasts && folder.includePeers.length === 0) {
-            return await fetchBroadcastChannelIds()
+            channelIds = await fetchBroadcastChannelIds()
+        } else {
+            // Use explicit includePeers list
+            channelIds = convertBareIdsToMarked(folder.includePeers, folder.title)
         }
 
-        // Use explicit includePeers list
-        return convertBareIdsToMarked(folder.includePeers, folder.title)
+        // Cache the result
+        folderChannelsCache.set(folderId, {
+            data: channelIds,
+            timestamp: Date.now()
+        })
+
+        return channelIds
     } catch (error) {
         if (import.meta.env.DEV) {
             console.error(`[Folders] Failed to get channels in folder ${folderId}:`, error)
@@ -175,8 +211,17 @@ export async function getChannelIdsInFolder(folderId: number): Promise<number[]>
 /**
  * Fetch all broadcast channel IDs by iterating dialogs
  * Used when folder has broadcasts=true but no explicit includePeers
+ * Results are cached since this is an expensive operation
  */
 async function fetchBroadcastChannelIds(): Promise<number[]> {
+    // Check cache first - this is expensive!
+    if (broadcastChannelsCache && (Date.now() - broadcastChannelsCache.timestamp < FOLDER_CHANNELS_CACHE_TTL_MS)) {
+        if (import.meta.env.DEV) {
+            console.log(`[Folders] Using cached broadcast channels: ${broadcastChannelsCache.data.length}`)
+        }
+        return broadcastChannelsCache.data
+    }
+
     const client = getTelegramClient()
     const channelIds: number[] = []
 
@@ -208,6 +253,12 @@ async function fetchBroadcastChannelIds(): Promise<number[]> {
 
         if (import.meta.env.DEV) {
             console.log(`[Folders] Found ${channelIds.length} broadcast channels (broadcasts flag)`)
+        }
+
+        // Cache the result
+        broadcastChannelsCache = {
+            data: channelIds,
+            timestamp: Date.now()
         }
 
         return channelIds

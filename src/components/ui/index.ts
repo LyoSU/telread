@@ -15,4 +15,8 @@ export {
   CommentSkeleton,
 } from './Skeleton'
 export { ErrorState, FullPageError, InlineError } from './ErrorState'
+export { UpdatePrompt } from './UpdatePrompt'
+export { PageTransition } from './PageTransition'
+export { Lightbox, createLightbox, type LightboxItem } from './Lightbox'
+export { VideoModal } from './VideoModal'
 export * from './Icons'
