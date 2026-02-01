@@ -65,7 +65,7 @@ const updateSW = registerSW({
 // Expose updateSW globally for the update prompt to use
 declare global {
   interface Window {
-    __swUpdate?: () => Promise<void>
+    __swUpdate?: (reloadPage?: boolean) => Promise<void>
   }
 }
 window.__swUpdate = updateSW

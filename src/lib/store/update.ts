@@ -27,7 +27,10 @@ function createUpdateStore() {
     
     setIsUpdating(true)
     try {
-      await window.__swUpdate?.()
+      // Pass true to reload page after SW activates
+      // This ensures new SW is active before reload
+      await window.__swUpdate?.(true)
+      // Fallback reload if updateSW didn't reload
       window.location.reload()
     } catch (error) {
       console.error('[UpdateStore] Failed to apply update:', error)
