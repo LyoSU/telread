@@ -1,4 +1,4 @@
-import { createSignal, Match, Switch, Show } from 'solid-js'
+import { createSignal, Match, Switch } from 'solid-js'
 import iconSvg from '/icons/icon.svg'
 import { Motion, Presence } from 'solid-motionone'
 import { PhoneInput } from './PhoneInput'
@@ -89,18 +89,17 @@ export function AuthFlow(props: AuthFlowProps) {
   }
 
   const displayStep = () => state().step
-  const isPhoneStep = () => displayStep() === 'phone'
 
   return (
-    <div class="min-h-screen bg-[var(--color-bg)] flex">
-      {/* Left side - Brand & Info (hidden on mobile when not on phone step) */}
+    <div class="min-h-[100dvh] bg-[var(--color-bg)] flex">
+      {/* Left side - Brand & Info (desktop only) */}
       <div 
-        class={`
+        class="
           hidden lg:flex flex-col justify-between
           w-[45%] p-12 
           bg-gradient-to-br from-[#0088cc]/10 via-[var(--color-bg)] to-[var(--accent)]/5
           border-r border-[var(--nav-border)]
-        `}
+        "
       >
         {/* Top - Logo */}
         <div>
@@ -126,17 +125,17 @@ export function AuthFlow(props: AuthFlowProps) {
           {/* Features */}
           <div class="space-y-4">
             <Feature 
-              icon="📖" 
+              icon="reader" 
               title="Reader-first design" 
               desc="Optimized for consuming long-form content from channels"
             />
             <Feature 
-              icon="🔒" 
+              icon="lock" 
               title="Direct to Telegram" 
               desc="MTProto protocol — your data goes straight to Telegram, not our servers"
             />
             <Feature 
-              icon="⚡" 
+              icon="bolt" 
               title="Fast & lightweight" 
               desc="No bloat, no tracking, works offline"
             />
@@ -151,27 +150,19 @@ export function AuthFlow(props: AuthFlowProps) {
         </div>
       </div>
 
-      {/* Right side - Auth form */}
-      <div class="flex-1 flex flex-col min-h-screen">
-        {/* Mobile header - only visible on small screens */}
-        <div class="lg:hidden p-6 border-b border-[var(--nav-border)]">
-          <div class="flex items-center gap-3">
-            <img src={iconSvg} alt="TelRead" class="w-9 h-9 rounded-lg" />
-            <span class="text-lg font-semibold text-primary">TelRead</span>
-          </div>
-        </div>
-
-        {/* Form container */}
-        <div class="flex-1 flex items-center justify-center p-6 lg:p-12">
-          <div class="w-full max-w-sm">
+      {/* Right side - Auth form (full screen on mobile) */}
+      <div class="flex-1 flex flex-col min-h-[100dvh]">
+        {/* Form container - centered vertically */}
+        <div class="flex-1 flex items-center justify-center px-6 py-8 lg:p-12 safe-top safe-bottom">
+          <div class="w-full max-w-[340px]">
             <Presence exitBeforeEnter>
               <Switch>
                 <Match when={displayStep() === 'phone'}>
                   <Motion.div
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.25, easing: [0.25, 0.46, 0.45, 0.94] }}
                   >
                     <PhoneInput
                       onSubmit={handlePhoneSubmit}
@@ -184,10 +175,10 @@ export function AuthFlow(props: AuthFlowProps) {
 
                 <Match when={displayStep() === 'code'}>
                   <Motion.div
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.25, easing: [0.25, 0.46, 0.45, 0.94] }}
                   >
                     <CodeInput
                       phone={(state() as { step: 'code'; phone: string }).phone}
@@ -201,10 +192,10 @@ export function AuthFlow(props: AuthFlowProps) {
 
                 <Match when={displayStep() === '2fa'}>
                   <Motion.div
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.25, easing: [0.25, 0.46, 0.45, 0.94] }}
                   >
                     <TwoFactorInput
                       hint={(state() as { step: '2fa'; hint?: string }).hint}
@@ -218,10 +209,10 @@ export function AuthFlow(props: AuthFlowProps) {
 
                 <Match when={displayStep() === 'qr'}>
                   <Motion.div
-                    initial={{ opacity: 0, scale: 0.98 }}
+                    initial={{ opacity: 0, scale: 0.96 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.98 }}
-                    transition={{ duration: 0.2 }}
+                    exit={{ opacity: 0, scale: 0.96 }}
+                    transition={{ duration: 0.25, easing: [0.25, 0.46, 0.45, 0.94] }}
                   >
                     <QRCodeLogin
                       qrUrl={(state() as { step: 'qr'; url: string }).url}
@@ -233,25 +224,7 @@ export function AuthFlow(props: AuthFlowProps) {
                 </Match>
               </Switch>
             </Presence>
-
-            {/* Mobile-only: Brief description */}
-            <Show when={isPhoneStep()}>
-              <div class="lg:hidden mt-8 pt-6 border-t border-[var(--nav-border)]">
-                <p class="text-sm text-tertiary text-center">
-                  TelRead is a reader for Telegram channels.
-                  <br />
-                  <span class="text-secondary">Your login goes directly to Telegram — we never see it.</span>
-                </p>
-              </div>
-            </Show>
           </div>
-        </div>
-
-        {/* Mobile footer */}
-        <div class="lg:hidden p-6 text-center text-xs text-tertiary border-t border-[var(--nav-border)]">
-          <span>Official Telegram API</span>
-          <span class="mx-2">•</span>
-          <span>MTProto 2.0</span>
         </div>
       </div>
     </div>
@@ -260,9 +233,19 @@ export function AuthFlow(props: AuthFlowProps) {
 
 /** Feature item for the left panel */
 function Feature(props: { icon: string; title: string; desc: string }) {
+  const iconMap: Record<string, string> = {
+    reader: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253',
+    lock: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
+    bolt: 'M13 10V3L4 14h7v7l9-11h-7z',
+  }
+  
   return (
     <div class="flex gap-4">
-      <span class="text-2xl">{props.icon}</span>
+      <div class="w-10 h-10 rounded-xl bg-[#0088cc]/10 flex items-center justify-center flex-shrink-0">
+        <svg class="w-5 h-5 text-[#0088cc]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d={iconMap[props.icon]} />
+        </svg>
+      </div>
       <div>
         <p class="font-medium text-primary">{props.title}</p>
         <p class="text-sm text-tertiary">{props.desc}</p>
