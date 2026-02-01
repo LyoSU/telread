@@ -27,7 +27,9 @@ function loadInitialState(): FolderStore {
             }
         }
     } catch (error) {
-        console.warn('[FolderStore] Failed to load from localStorage:', error)
+        if (import.meta.env.DEV) {
+            console.warn('[FolderStore] Failed to load from localStorage:', error)
+        }
     }
 
     return {
@@ -53,7 +55,9 @@ export function setSelectedFolder(folderId: number | null, channelIds: number[] 
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ selectedFolderId: folderId }))
     } catch (error) {
-        console.warn('[FolderStore] Failed to save to localStorage:', error)
+        if (import.meta.env.DEV) {
+            console.warn('[FolderStore] Failed to save to localStorage:', error)
+        }
     }
 
     if (import.meta.env.DEV) {

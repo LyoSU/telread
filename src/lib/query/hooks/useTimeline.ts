@@ -564,7 +564,6 @@ export function useOptimizedTimeline() {
     const keys = postsState.sortedKeys
     let posts = keys.map((key) => postsState.byId[key]).filter(Boolean) as Message[]
 
-    const totalPosts = posts.length
     const folderId = folderStore.selectedFolderId
     const folderChannelIds = folderStore.channelIdsInFolder
 
