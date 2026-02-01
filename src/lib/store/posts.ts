@@ -149,10 +149,7 @@ export function upsertPost(post: Message): void {
         // Post is older than top → add directly to sorted (no button)
         s.sortedKeys = insertSorted(s.sortedKeys, key, s.byId)
         trimToMaxPosts(s)
-        
-        if (import.meta.env.DEV) {
-          console.log(`[Posts] Old post inserted directly (date: ${post.date}, top: ${topPost?.date})`)
-        }
+        // Note: Not logging individual old posts to reduce noise during catch-up
       }
     }
   }))

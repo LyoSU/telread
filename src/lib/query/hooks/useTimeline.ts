@@ -19,6 +19,8 @@ import {
   getChannels,
   createChannelMap,
   restoreChannelsFromCache,
+  startActivityTracking,
+  getLastActiveDescription,
 } from '@/lib/store'
 import { getTime, groupPostsByMediaGroup } from '@/lib/utils'
 import { queryKeys } from '../keys'
@@ -357,7 +359,12 @@ async function fetchTimelineHistory(
  * Light background sync: fetch recent messages from TOP channels only
  * 
  * Minimal sync - just top 10 most active channels, 3 messages each
- * Real-time updates handle the rest
+ * Real-time updates (mtcute catchUp) handle the rest
+ * 
+ * Why this is enough:
+ * - fetchChannelsWithLastMessages() already gets latest post per channel (1 API call)
+ * - mtcute catchUp fetches missed updates automatically
+ * - This just fills in a few more posts for better UX
  * 
  * Posts are saved to both RAM store AND persistent cache (IndexedDB)
  */
@@ -373,7 +380,8 @@ async function backgroundSyncRecentHistory(channels: ChannelWithLastMessage[]): 
     .slice(0, TOP_CHANNELS)
 
   if (import.meta.env.DEV) {
-    console.log(`[Timeline] Background sync: ${sortedChannels.length} channels × ${MESSAGES_PER_CHANNEL} msgs`)
+    const lastActive = getLastActiveDescription()
+    console.log(`[Timeline] Background sync: ${sortedChannels.length} channels × ${MESSAGES_PER_CHANNEL} msgs (last active: ${lastActive})`)
   }
 
   const allMessages: Message[] = []
@@ -500,6 +508,11 @@ export function useOptimizedTimeline() {
       // Ignore errors during cleanup
     })
   })
+  
+  // Start activity tracking (updates lastActive timestamp periodically)
+  // This is used to determine sync strategy on next app start
+  const stopActivityTracking = startActivityTracking()
+  onCleanup(stopActivityTracking)
 
   // Populate posts from history pages (from cache or after scroll fetch)
   // Track processed page count to avoid re-processing

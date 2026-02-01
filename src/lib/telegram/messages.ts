@@ -515,6 +515,8 @@ export async function fetchMoreHistory(
 // Helpers - exported for use in channels.ts and updates.ts
 
 export function mapMessage(msg: TgMessage, channelId: number): Message | null {
+  // Skip service messages (no text and no media)
+  // Examples: pinned message notifications, user joined, etc.
   if (!msg.text && !msg.media) {
     return null
   }

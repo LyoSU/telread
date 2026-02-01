@@ -4,6 +4,10 @@ export { preferencesStore, type Preferences } from './preferences'
 export { bookmarksStore, type Bookmark } from './bookmarks'
 export { updateStore } from './update'
 export {
+  startActivityTracking,
+  getLastActiveDescription,
+} from './activity'
+export {
   upsertPost,
   upsertPosts,
   removePosts,
