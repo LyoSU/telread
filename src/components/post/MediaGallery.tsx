@@ -189,6 +189,52 @@ function GalleryModal(props: {
 
   // Track if closed by back button
   let closedByBackButton = false
+  
+  // Swipe handling
+  let touchStartX = 0
+  let touchStartY = 0
+  let touchDeltaX = 0
+  let touchDeltaY = 0
+  const [swipeOffset, setSwipeOffset] = createSignal({ x: 0, y: 0 })
+  const SWIPE_THRESHOLD = 50
+
+  const handleTouchStart = (e: TouchEvent) => {
+    touchStartX = e.touches[0].clientX
+    touchStartY = e.touches[0].clientY
+    touchDeltaX = 0
+    touchDeltaY = 0
+  }
+
+  const handleTouchMove = (e: TouchEvent) => {
+    touchDeltaX = e.touches[0].clientX - touchStartX
+    touchDeltaY = e.touches[0].clientY - touchStartY
+    
+    // Only track vertical for dismiss, show visual feedback
+    if (Math.abs(touchDeltaY) > Math.abs(touchDeltaX) && touchDeltaY > 0) {
+      setSwipeOffset({ x: 0, y: touchDeltaY })
+      e.preventDefault()
+    }
+  }
+
+  const handleTouchEnd = () => {
+    // Swipe down to close
+    if (touchDeltaY > SWIPE_THRESHOLD * 2 && Math.abs(touchDeltaY) > Math.abs(touchDeltaX)) {
+      closeModal()
+      return
+    }
+    
+    // Swipe left/right to navigate
+    if (Math.abs(touchDeltaX) > SWIPE_THRESHOLD && Math.abs(touchDeltaX) > Math.abs(touchDeltaY)) {
+      if (touchDeltaX > 0) {
+        goToPrev()
+      } else {
+        goToNext()
+      }
+    }
+    
+    // Reset offset
+    setSwipeOffset({ x: 0, y: 0 })
+  }
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -280,11 +326,15 @@ function GalleryModal(props: {
         </button>
       </Show>
 
-      {/* Media content */}
+      {/* Media content - with swipe gestures */}
       <div
-        class="w-full h-full flex items-center justify-center p-4"
+        class="w-full h-full flex items-center justify-center p-4 transition-transform duration-150"
+        style={{ transform: `translateY(${swipeOffset().y}px)`, opacity: 1 - swipeOffset().y / 300 }}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <Show
           when={fullQuery.data}

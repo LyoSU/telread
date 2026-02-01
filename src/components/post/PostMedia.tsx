@@ -1176,6 +1176,52 @@ function MediaModal(props: {
   // Track if closed by back button to avoid double history.back()
   let closedByBackButton = false
 
+  // Swipe-down to close (like Instagram/Telegram)
+  let touchStartY = 0
+  let touchStartTime = 0
+  const [swipeOffset, setSwipeOffset] = createSignal(0)
+  const [isAnimating, setIsAnimating] = createSignal(false)
+  const SWIPE_THRESHOLD = 100
+  const VELOCITY_THRESHOLD = 0.5 // px/ms
+
+  const handleTouchStart = (e: TouchEvent) => {
+    if (isAnimating()) return
+    touchStartY = e.touches[0].clientY
+    touchStartTime = Date.now()
+    setSwipeOffset(0)
+  }
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (isAnimating()) return
+    const deltaY = e.touches[0].clientY - touchStartY
+    
+    // Only allow downward swipe for dismissal (with resistance at top)
+    if (deltaY > 0) {
+      // Add rubber-band resistance as user swipes further
+      const resistance = 1 - Math.min(deltaY / 600, 0.5)
+      setSwipeOffset(deltaY * resistance)
+      e.preventDefault()
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (isAnimating()) return
+    
+    const deltaY = swipeOffset()
+    const deltaTime = Date.now() - touchStartTime
+    const velocity = deltaY / deltaTime
+
+    // Close if swiped far enough OR fast enough
+    if (deltaY > SWIPE_THRESHOLD || velocity > VELOCITY_THRESHOLD) {
+      setIsAnimating(true)
+      setSwipeOffset(window.innerHeight) // Animate off screen
+      setTimeout(() => closeModal(), 200)
+    } else {
+      // Snap back
+      setSwipeOffset(0)
+    }
+  }
+
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault()
@@ -1234,7 +1280,15 @@ function MediaModal(props: {
 
       <div
         class="w-full h-full flex items-center justify-center"
+        style={{
+          transform: `translateY(${swipeOffset()}px)`,
+          opacity: Math.max(0, 1 - swipeOffset() / 400),
+          transition: isAnimating() || swipeOffset() === 0 ? 'transform 0.2s ease-out, opacity 0.2s ease-out' : 'none',
+        }}
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         {/* Photo */}
         <Show when={props.media.type === 'photo'}>
