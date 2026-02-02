@@ -5,6 +5,7 @@ import { PostContent, PostMedia, PostActions } from '@/components/post'
 import { formatTimeAgo, globalNow } from '@/lib/utils'
 import { CornerDownRight } from 'lucide-solid'
 import type { Message } from '@/lib/telegram'
+import { UI } from '@/config/constants'
 
 interface TimelinePostProps {
   post: Message
@@ -15,9 +16,6 @@ interface TimelinePostProps {
   style?: Record<string, string>
   onCommentClick?: () => void
 }
-
-// Approximate character count for 4 lines
-const TRUNCATE_THRESHOLD = 280
 
 /**
  * Individual post in the timeline
@@ -58,7 +56,7 @@ export function TimelinePost(props: TimelinePostProps) {
   const isTruncated = createMemo(() => {
     if (!props.post.text) return false
     // Check character count or line breaks
-    return props.post.text.length > TRUNCATE_THRESHOLD ||
+    return props.post.text.length > UI.TRUNCATE_THRESHOLD ||
            (props.post.text.match(/\n/g) || []).length > 3
   })
 

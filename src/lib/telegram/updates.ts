@@ -398,11 +398,11 @@ export function startUpdatesListener(): UpdatesCleanup {
 
         // Clear internal memory cache and invalidate queries
         clearFoldersCache()
-        Promise.all([
+        void Promise.all([
           queryClient.invalidateQueries({ queryKey: queryKeys.folders.all }),
           queryClient.invalidateQueries({ queryKey: queryKeys.timeline.all }),
-        ]).catch(e => {
-          console.error('[Updates] Failed to invalidate queries:', e)
+        ]).catch((error) => {
+          console.error('[Updates] Failed to invalidate queries:', error)
         })
         return
       }
@@ -447,7 +447,9 @@ export function startUpdatesListener(): UpdatesCleanup {
 
         // Also invalidate folder caches
         clearFoldersCache()
-        queryClient.invalidateQueries({ queryKey: queryKeys.folders.all }).catch(() => {})
+        void queryClient.invalidateQueries({ queryKey: queryKeys.folders.all }).catch((error) => {
+          console.error('[Updates] Failed to invalidate folders:', error)
+        })
         return
       }
 

@@ -54,17 +54,20 @@ export function groupPostsByMediaGroup(posts: Message[]): TimelineItem[] {
     if (item.type === 'single') {
       result.push({ type: 'single', post: item.post })
     } else {
-      const groupPosts = groupMap.get(item.key)!
+      const groupPosts = groupMap.get(item.key)
+      if (!groupPosts || groupPosts.length === 0) continue
+
       // Sort by message ID to maintain order within album
       groupPosts.sort((a, b) => a.id - b.id)
 
+      const firstPost = groupPosts[0]
       if (groupPosts.length === 1) {
-        result.push({ type: 'single', post: groupPosts[0] })
-      } else {
+        result.push({ type: 'single', post: firstPost })
+      } else if (firstPost.groupedId) {
         result.push({
           type: 'group',
           posts: groupPosts,
-          groupedId: groupPosts[0].groupedId!,
+          groupedId: firstPost.groupedId,
         })
       }
     }
@@ -102,10 +105,10 @@ export function getMediaItems(item: TimelineItem): Array<{
   }
 
   return item.posts
-    .filter((p) => p.media)
+    .filter((p): p is Message & { media: NonNullable<Message['media']> } => p.media != null)
     .map((p) => ({
       channelId: p.channelId,
       messageId: p.id,
-      media: p.media!,
+      media: p.media,
     }))
 }

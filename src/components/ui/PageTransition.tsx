@@ -1,5 +1,6 @@
 import { type ParentProps, createEffect, createSignal, on } from 'solid-js'
 import { useLocation } from '@solidjs/router'
+import { TIMING } from '@/config/constants'
 
 /**
  * PageTransition - Smooth fade transitions between routes
@@ -20,12 +21,12 @@ export function PageTransition(props: ParentProps) {
         if (newPath !== currentPath()) {
           // Start fade out
           setIsVisible(false)
-          
+
           // After fade out, update path and fade in
           setTimeout(() => {
             setCurrentPath(newPath)
             setIsVisible(true)
-          }, 150) // Match CSS transition duration
+          }, TIMING.PAGE_TRANSITION_DELAY) // Match CSS transition duration
         }
       },
       { defer: true }

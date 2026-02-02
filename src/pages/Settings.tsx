@@ -1,6 +1,6 @@
 import { Show, createSignal } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
-import { GlassCard, GlassButton, UserAvatar, ConfirmDialog } from '@/components/ui'
+import { GlassCard, GlassButton, UserAvatar, ConfirmDialog, Toggle } from '@/components/ui'
 import { themeStore, authStore, updateStore, preferencesStore, clearPosts, type Theme } from '@/lib/store'
 import { logout } from '@/lib/telegram'
 import { queryClient, queryKeys } from '@/lib/query'
@@ -106,29 +106,10 @@ function Settings() {
                   <p class="text-xs text-tertiary">Filter feed by Telegram folders</p>
                 </div>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={preferencesStore.preferences.showFolders}
-                onClick={() => preferencesStore.setPreference('showFolders', !preferencesStore.preferences.showFolders)}
-                class={`
-                  relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full 
-                  border-2 border-transparent transition-colors duration-200 ease-in-out
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
-                  ${preferencesStore.preferences.showFolders 
-                    ? 'bg-[var(--accent)]' 
-                    : 'bg-[var(--color-text-tertiary)]/30'
-                  }
-                `}
-              >
-                <span
-                  class={`
-                    pointer-events-none inline-block h-5 w-5 transform rounded-full 
-                    bg-white shadow-lg ring-0 transition duration-200 ease-in-out
-                    ${preferencesStore.preferences.showFolders ? 'translate-x-5' : 'translate-x-0'}
-                  `}
-                />
-              </button>
+              <Toggle
+                checked={preferencesStore.preferences.showFolders}
+                onChange={(checked) => preferencesStore.setPreference('showFolders', checked)}
+              />
             </div>
 
             {/* Hide archived toggle */}
@@ -142,29 +123,10 @@ function Settings() {
                   <p class="text-xs text-tertiary">Don't show archived channels</p>
                 </div>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={preferencesStore.preferences.hideArchived}
-                onClick={() => preferencesStore.setPreference('hideArchived', !preferencesStore.preferences.hideArchived)}
-                class={`
-                  relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full 
-                  border-2 border-transparent transition-colors duration-200 ease-in-out
-                  focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2
-                  ${preferencesStore.preferences.hideArchived 
-                    ? 'bg-[var(--accent)]' 
-                    : 'bg-[var(--color-text-tertiary)]/30'
-                  }
-                `}
-              >
-                <span
-                  class={`
-                    pointer-events-none inline-block h-5 w-5 transform rounded-full 
-                    bg-white shadow-lg ring-0 transition duration-200 ease-in-out
-                    ${preferencesStore.preferences.hideArchived ? 'translate-x-5' : 'translate-x-0'}
-                  `}
-                />
-              </button>
+              <Toggle
+                checked={preferencesStore.preferences.hideArchived}
+                onChange={(checked) => preferencesStore.setPreference('hideArchived', checked)}
+              />
             </div>
           </div>
         </GlassCard>

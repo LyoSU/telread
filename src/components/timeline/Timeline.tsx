@@ -2,15 +2,12 @@ import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-j
 import { TimelinePost } from './TimelinePost'
 import { TimelineGroup } from './TimelineGroup'
 import { PostSkeleton } from '@/components/ui'
-import { INFINITE_SCROLL_THRESHOLD, SCROLL_THROTTLE_MS } from '@/config/constants'
+import { INFINITE_SCROLL_THRESHOLD, SCROLL_THROTTLE_MS, UI, TIMING } from '@/config/constants'
 import { Newspaper } from 'lucide-solid'
 // Visibility-based openChat removed - simple updateOpenChannels on load is sufficient
 import type { Channel } from '@/lib/telegram'
+import type { Message } from '@/lib/telegram'
 import type { TimelineItem } from '@/lib/utils'
-
-// Initial posts to render, then load more on scroll
-const INITIAL_RENDER_COUNT = 15
-const RENDER_BATCH_SIZE = 10
 
 interface TimelineProps {
   items: TimelineItem[]
@@ -32,7 +29,7 @@ interface TimelineProps {
  * Always renders - uses fallback title if channel unknown
  */
 function SinglePostItem(props: {
-  item: { type: 'single'; post: any }
+  item: { type: 'single'; post: Message }
   getChannel: (id: number) => Channel | undefined
 }) {
   const channel = () => props.getChannel(props.item.post.channelId)
@@ -52,10 +49,10 @@ function SinglePostItem(props: {
  * Always renders - uses fallback title if channel unknown
  */
 function GroupPostItem(props: {
-  item: { type: 'group'; posts: any[]; groupedId: bigint }
+  item: { type: 'group'; posts: Message[]; groupedId: bigint }
   getChannel: (id: number) => Channel | undefined
 }) {
-  const primaryPost = () => props.item.posts.find((p: any) => p.text) || props.item.posts[0]
+  const primaryPost = () => props.item.posts.find((p) => p.text) || props.item.posts[0]
   const channel = () => props.getChannel(primaryPost().channelId)
 
   return (
@@ -101,7 +98,7 @@ export function Timeline(props: TimelineProps) {
 
 
   // Incremental rendering - start with few items, render more on scroll
-  const [renderCount, setRenderCount] = createSignal(INITIAL_RENDER_COUNT)
+  const [renderCount, setRenderCount] = createSignal(UI.INITIAL_RENDER_COUNT)
   
   // Items to actually render (limited for performance)
   const visibleItems = createMemo(() => {
@@ -151,7 +148,7 @@ export function Timeline(props: TimelineProps) {
       const savedRenderCount = sessionStorage.getItem(renderKey)
       if (savedRenderCount) {
         const count = parseInt(savedRenderCount, 10)
-        if (!isNaN(count) && count > INITIAL_RENDER_COUNT) {
+        if (!isNaN(count) && count > UI.INITIAL_RENDER_COUNT) {
           setRenderCount(count)
         }
       }
@@ -189,7 +186,7 @@ export function Timeline(props: TimelineProps) {
 
     // Incremental rendering - NOT throttled (fast, no API call)
     if (distanceFromBottom < INFINITE_SCROLL_THRESHOLD && hasMoreToRender()) {
-      setRenderCount(prev => Math.min(prev + RENDER_BATCH_SIZE, (props.items?.length ?? 0)))
+      setRenderCount(prev => Math.min(prev + UI.RENDER_BATCH_SIZE, (props.items?.length ?? 0)))
     }
     
     // API calls - throttled to prevent spam
@@ -211,7 +208,7 @@ export function Timeline(props: TimelineProps) {
     if (scrollParent) {
       scrollParent.addEventListener('scroll', handleScroll, { passive: true })
       // Wait for content to be ready then restore state
-      restoreTimer = setTimeout(restoreState, 50)
+      restoreTimer = setTimeout(restoreState, TIMING.SCROLL_RESTORE_DELAY)
     }
   })
 
@@ -294,13 +291,13 @@ export function Timeline(props: TimelineProps) {
             when={item.type === 'single'}
             fallback={
               <GroupPostItem
-                item={item as { type: 'group'; posts: any[]; groupedId: bigint }}
+                item={item as { type: 'group'; posts: Message[]; groupedId: bigint }}
                 getChannel={getChannel}
               />
             }
           >
             <SinglePostItem
-              item={item as { type: 'single'; post: any }}
+              item={item as { type: 'single'; post: Message }}
               getChannel={getChannel}
             />
           </Show>

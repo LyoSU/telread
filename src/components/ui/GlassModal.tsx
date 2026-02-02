@@ -4,6 +4,17 @@ import { Motion, Presence } from 'solid-motionone'
 import { X } from 'lucide-solid'
 import { haptic } from '@/lib/utils'
 
+function ModalHeader(props: { title: string; onClose: () => void; compact?: boolean }) {
+  return (
+    <div class={`flex items-center justify-between px-6 ${props.compact ? 'py-3' : 'py-5'} border-b border-[var(--glass-border)]`}>
+      <h2 class="text-lg font-semibold text-primary">{props.title}</h2>
+      <button onClick={() => { haptic('light'); props.onClose() }} class="pill p-2.5">
+        <X size={16} />
+      </button>
+    </div>
+  )
+}
+
 interface GlassModalProps extends ParentProps {
   open: boolean
   onClose: () => void
@@ -126,17 +137,7 @@ export function GlassModal(props: GlassModalProps) {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <Show when={props.title}>
-                    <div class="flex items-center justify-between px-6 py-5 border-b border-[var(--glass-border)]">
-                      <h2 class="text-lg font-semibold text-primary">
-                        {props.title}
-                      </h2>
-                      <button
-                        onClick={() => { haptic('light'); props.onClose() }}
-                        class="pill p-2.5"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
+                    <ModalHeader title={props.title!} onClose={props.onClose} />
                   </Show>
                   <div class="flex-1 overflow-y-auto custom-scrollbar p-6">
                     {props.children}
@@ -175,17 +176,7 @@ export function GlassModal(props: GlassModalProps) {
 
                 {/* Header */}
                 <Show when={props.title}>
-                  <div class="flex items-center justify-between px-6 py-3 border-b border-[var(--glass-border)]">
-                    <h2 class="text-lg font-semibold text-primary">
-                      {props.title}
-                    </h2>
-                    <button
-                      onClick={() => { haptic('light'); props.onClose() }}
-                      class="pill p-2.5"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
+                  <ModalHeader title={props.title!} onClose={props.onClose} compact />
                 </Show>
 
                 {/* Content */}

@@ -3,6 +3,7 @@ import { ChannelAvatar, GlassButton } from '@/components/ui'
 import { downloadProfilePhoto, isClientReady } from '@/lib/telegram'
 import type { ChannelFullInfo } from '@/lib/telegram'
 import { Check, Shield, AlertTriangle, BadgeCheck, Users, Clock, Send } from 'lucide-solid'
+import { MEDIA } from '@/config/constants'
 
 interface ChannelCardProps {
   channel: ChannelFullInfo
@@ -29,7 +30,7 @@ function extractDominantColor(imageUrl: string): Promise<{ h: number; s: number;
         }
 
         // Sample at small size for performance
-        const size = 50
+        const size = MEDIA.COLOR_EXTRACT_SIZE
         canvas.width = size
         canvas.height = size
         ctx.drawImage(img, 0, 0, size, size)
@@ -45,7 +46,7 @@ function extractDominantColor(imageUrl: string): Promise<{ h: number; s: number;
           const brightness = (pr + pg + pb) / 3
 
           // Skip very dark or very light pixels
-          if (brightness > 30 && brightness < 225) {
+          if (brightness > MEDIA.BRIGHTNESS_MIN && brightness < MEDIA.BRIGHTNESS_MAX) {
             r += pr
             g += pg
             b += pb

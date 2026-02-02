@@ -1,6 +1,7 @@
 import { createSignal, Show } from 'solid-js'
 import { GlassButton, UserAvatar } from '@/components/ui'
 import { authStore } from '@/lib/store'
+import { CommentInput, type CommentInputRef } from './CommentInput'
 
 interface CommentComposerProps {
   onSubmit: (text: string) => void
@@ -14,7 +15,7 @@ interface CommentComposerProps {
  */
 export function CommentComposer(props: CommentComposerProps) {
   const [text, setText] = createSignal('')
-  let textareaRef: HTMLTextAreaElement | undefined
+  let inputRef: CommentInputRef | undefined
 
   const handleSubmit = () => {
     const content = text().trim()
@@ -24,24 +25,7 @@ export function CommentComposer(props: CommentComposerProps) {
     setText('')
 
     // Reset textarea height
-    if (textareaRef) {
-      textareaRef.style.height = 'auto'
-    }
-  }
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault()
-      handleSubmit()
-    }
-  }
-
-  // Auto-resize textarea
-  const handleInput = (e: InputEvent) => {
-    const target = e.target as HTMLTextAreaElement
-    setText(target.value)
-    target.style.height = 'auto'
-    target.style.height = `${target.scrollHeight}px`
+    inputRef?.resetHeight()
   }
 
   return (
@@ -53,14 +37,13 @@ export function CommentComposer(props: CommentComposerProps) {
       />
 
       <div class="flex-1 glass rounded-2xl px-4 py-3">
-        <textarea
-          ref={textareaRef}
+        <CommentInput
+          ref={(ref) => { inputRef = ref }}
           value={text()}
-          onInput={handleInput}
-          onKeyDown={handleKeyDown}
+          onInput={setText}
+          onSubmit={handleSubmit}
           placeholder="Add comment..."
-          rows={1}
-          class="w-full bg-transparent resize-none outline-none text-primary text-sm min-h-[24px] max-h-[200px] placeholder:text-tertiary"
+          maxHeight={200}
         />
 
         <Show when={text().trim().length > 0}>

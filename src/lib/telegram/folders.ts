@@ -1,15 +1,16 @@
 import { getTelegramClient } from './client'
 import type { tl } from '@mtcute/web'
+import { TIMING } from '@/config/constants'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Constants
 // ═══════════════════════════════════════════════════════════════════════════
 
 /** Cache TTL for dialog filters (5 minutes - folders rarely change) */
-const FILTERS_CACHE_TTL_MS = 5 * 60 * 1000
+const FILTERS_CACHE_TTL_MS = TIMING.QUERY_STALE_TIME
 
 /** Cache TTL for folder channel IDs (5 minutes) */
-const FOLDER_CHANNELS_CACHE_TTL_MS = 5 * 60 * 1000
+const FOLDER_CHANNELS_CACHE_TTL_MS = TIMING.QUERY_STALE_TIME
 
 /** Maximum dialogs to iterate when fetching broadcast channels */
 const MAX_DIALOGS_TO_ITERATE = 200

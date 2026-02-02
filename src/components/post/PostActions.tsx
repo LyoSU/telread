@@ -9,7 +9,7 @@ interface PostActionsProps {
   channelId: number
   messageId: number
   channelTitle: string
-  preview: string
+  preview?: string
   views?: number
   replies?: number
   reactions?: MessageReaction[]
@@ -34,7 +34,7 @@ export function PostActions(props: PostActionsProps) {
       props.channelId,
       props.messageId,
       props.channelTitle,
-      props.preview
+      props.preview ?? ''
     )
   }
 

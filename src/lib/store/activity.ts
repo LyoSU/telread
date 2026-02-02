@@ -1,13 +1,15 @@
 /**
  * Activity tracking - records when user was last active
- * 
+ *
  * Used for:
  * - Logging/debugging (see how long user was away)
  * - Potential future optimizations based on absence duration
- * 
+ *
  * The actual sync strategy relies on mtcute's built-in catchUp mechanism
  * which handles missed updates automatically.
  */
+
+import { TIMING } from '@/config/constants'
 
 const STORAGE_KEY = 'telread:lastActive'
 
@@ -48,9 +50,9 @@ export function updateLastActive(): void {
 export function startActivityTracking(): () => void {
   // Update immediately on start
   updateLastActive()
-  
+
   // Update periodically
-  const intervalId = setInterval(updateLastActive, 5 * 60 * 1000)
+  const intervalId = setInterval(updateLastActive, TIMING.ACTIVITY_UPDATE_INTERVAL)
   
   // Update on visibility change (when tab becomes visible)
   const handleVisibility = () => {

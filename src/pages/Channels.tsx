@@ -146,9 +146,11 @@ function Channels() {
                       </p>
                     </Show>
                     <Show when={channel.participantsCount}>
-                      <p class="text-xs text-tertiary mt-1">
-                        {formatCount(channel.participantsCount!)} subscribers
-                      </p>
+                      {(count) => (
+                        <p class="text-xs text-tertiary mt-1">
+                          {formatCount(count())} subscribers
+                        </p>
+                      )}
                     </Show>
                   </div>
                   <ChevronRight size={20} class="text-tertiary flex-shrink-0" />

@@ -6,6 +6,7 @@ import App from './App'
 import { cacheReadyPromise } from '@/lib/query/client'
 import { updateStore } from '@/lib/store'
 import { fetchArchivedChannelIds } from '@/lib/telegram/channels'
+import { TIMING } from '@/config/constants'
 
 // Safety net for SolidJS cleanNode errors during navigation
 // These shouldn't occur with proper cleanup, but suppress them just in case
@@ -38,9 +39,9 @@ cacheReadyPromise.then(() => {
   requestAnimationFrame(() => {
     const splash = document.getElementById('splash')
     if (splash) {
-      splash.style.transition = 'opacity 150ms ease-out'
+      splash.style.transition = `opacity ${TIMING.SPLASH_FADE_DELAY}ms ease-out`
       splash.style.opacity = '0'
-      setTimeout(() => splash.remove(), 150)
+      setTimeout(() => splash.remove(), TIMING.SPLASH_FADE_DELAY)
     }
   })
 })
@@ -58,7 +59,7 @@ const updateSW = registerSW({
     if (registration) {
       setInterval(() => {
         registration.update()
-      }, 60 * 60 * 1000)
+      }, TIMING.SW_UPDATE_INTERVAL)
     }
   },
 })

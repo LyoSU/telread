@@ -95,23 +95,27 @@ export function CommentItem(props: CommentItemProps) {
 
         {/* Media */}
         <Show when={props.comment.media}>
-          <Show
-            when={props.discussionChatId}
-            fallback={
-              <div class="mt-2 px-3 py-2 rounded-lg bg-[var(--glass-bg)] text-xs text-tertiary">
-                Media attachment
-              </div>
-            }
-          >
-            <div class="mt-2">
-              <PostMedia
-                channelId={props.discussionChatId!}
-                messageId={props.comment.id}
-                media={props.comment.media!}
-                class="rounded-lg max-w-xs"
-              />
-            </div>
-          </Show>
+          {(media) => (
+            <Show
+              when={props.discussionChatId}
+              fallback={
+                <div class="mt-2 px-3 py-2 rounded-lg bg-[var(--glass-bg)] text-xs text-tertiary">
+                  Media attachment
+                </div>
+              }
+            >
+              {(chatId) => (
+                <div class="mt-2">
+                  <PostMedia
+                    channelId={chatId()}
+                    messageId={props.comment.id}
+                    media={media()}
+                    class="rounded-lg max-w-xs"
+                  />
+                </div>
+              )}
+            </Show>
+          )}
         </Show>
 
         {/* Reactions */}

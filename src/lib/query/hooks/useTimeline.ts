@@ -31,19 +31,27 @@ import {
 import { getTime, groupPostsByMediaGroup } from '@/lib/utils'
 import { queryKeys } from '../keys'
 import { queryClient } from '../client'
+import { TIMING } from '@/config/constants'
 
 /** Cooldown for archived IDs refresh (5 minutes) */
-const ARCHIVED_REFRESH_COOLDOWN_MS = 5 * 60 * 1000
+const ARCHIVED_REFRESH_COOLDOWN_MS = TIMING.QUERY_STALE_TIME
 let lastArchivedRefreshTime = 0
+let pendingRefreshPromise: Promise<void> | null = null
 
 /**
  * Refresh archived channel IDs in background
  * Called on startup and when tab becomes visible
  * Has cooldown to prevent excessive API calls
+ * Deduplicates concurrent calls to prevent race conditions
  */
 export function refreshArchivedIds(force = false): Promise<void> {
+  // Return existing promise if refresh is already in progress
+  if (pendingRefreshPromise) {
+    return pendingRefreshPromise
+  }
+
   const now = Date.now()
-  
+
   // Skip if within cooldown (unless forced)
   if (!force && now - lastArchivedRefreshTime < ARCHIVED_REFRESH_COOLDOWN_MS) {
     if (import.meta.env.DEV) {
@@ -52,10 +60,10 @@ export function refreshArchivedIds(force = false): Promise<void> {
     }
     return Promise.resolve()
   }
-  
+
   lastArchivedRefreshTime = now
-  
-  return fetchArchivedChannelIds()
+
+  pendingRefreshPromise = fetchArchivedChannelIds()
     .then((archivedIds) => {
       // Only update if we got results (don't clear cache on network failure)
       if (archivedIds.size > 0) {
@@ -70,6 +78,11 @@ export function refreshArchivedIds(force = false): Promise<void> {
       }
       // Keep existing cached data on error
     })
+    .finally(() => {
+      pendingRefreshPromise = null
+    })
+
+  return pendingRefreshPromise
 }
 
 /**
@@ -87,7 +100,7 @@ export function useMessages(channelId: () => number, enabled?: () => boolean) {
       return messages
     },
     enabled: (enabled?.() ?? true) && channelId() !== 0,
-    staleTime: 1000 * 60 * 5, // 5 min
+    staleTime: TIMING.QUERY_STALE_TIME,
   }))
 
   // Sync cached data to postsState on restore
@@ -120,7 +133,7 @@ export function useInfiniteMessages(channelId: () => number) {
       return lastPage[lastPage.length - 1]?.id
     },
     enabled: channelId() !== 0,
-    staleTime: 1000 * 60 * 5,
+    staleTime: TIMING.QUERY_STALE_TIME,
   }))
 
   // Sync cached pages to postsState
@@ -514,7 +527,7 @@ export function useOptimizedTimeline() {
     },
     // Enable if we have channels to fetch from
     enabled: !!initialQuery.data?.channels || (folderStore.selectedFolderId !== null && folderStore.channelIdsInFolder.length > 0),
-    staleTime: 1000 * 60 * 5,
+    staleTime: TIMING.QUERY_STALE_TIME,
   }))
 
   // Populate stores when data loads (from cache or fresh fetch)
@@ -565,14 +578,12 @@ export function useOptimizedTimeline() {
           // Fetch fresh archived channel IDs in background (uses raw API due to mtcute bug)
           // Cache was already restored above for instant filtering
           // Force=true on startup to ensure fresh data
-          refreshArchivedIds(true)
+          void refreshArchivedIds(true)
 
           // Open top channels for real-time updates (MTProto requirement)
           // This is critical for receiving consistent updates
-          updateOpenChannels(data.channels).catch((error) => {
-            if (import.meta.env.DEV) {
-              console.warn('[Timeline] Failed to open channels:', error)
-            }
+          void updateOpenChannels(data.channels).catch((error) => {
+            console.error('[Timeline] Failed to open channels:', error)
           })
         }
       }
@@ -581,8 +592,8 @@ export function useOptimizedTimeline() {
 
   // Cleanup: close all open channels when component unmounts
   onCleanup(() => {
-    closeAllChannels().catch(() => {
-      // Ignore errors during cleanup
+    void closeAllChannels().catch((error) => {
+      console.error('[Timeline] Failed to close channels during cleanup:', error)
     })
   })
   

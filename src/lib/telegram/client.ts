@@ -317,32 +317,56 @@ export function onNetworkOnline(callback: () => void): () => void {
   }
 }
 
-// Setup network event listeners
-if (typeof window !== 'undefined') {
-  window.addEventListener('online', () => {
-    setIsOnline(true)
+// Network event handlers (stored for cleanup)
+let networkListenersCleanup: (() => void) | null = null
 
-    if (import.meta.env.DEV) {
-      console.log('[TelRead] Network online')
-    }
+function handleOnline(): void {
+  setIsOnline(true)
 
-    // Run registered callbacks
-    for (const callback of onlineCallbacks) {
-      try {
-        callback()
-      } catch (error) {
-        if (import.meta.env.DEV) {
-          console.error('[TelRead] Online callback error:', error)
-        }
+  if (import.meta.env.DEV) {
+    console.log('[TelRead] Network online')
+  }
+
+  // Run registered callbacks
+  for (const callback of onlineCallbacks) {
+    try {
+      callback()
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('[TelRead] Online callback error:', error)
       }
     }
-  })
+  }
+}
 
-  window.addEventListener('offline', () => {
-    setIsOnline(false)
+function handleOffline(): void {
+  setIsOnline(false)
 
-    if (import.meta.env.DEV) {
-      console.log('[TelRead] Network offline')
-    }
-  })
+  if (import.meta.env.DEV) {
+    console.log('[TelRead] Network offline')
+  }
+}
+
+// Setup network event listeners
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', handleOnline)
+  window.addEventListener('offline', handleOffline)
+
+  networkListenersCleanup = () => {
+    window.removeEventListener('online', handleOnline)
+    window.removeEventListener('offline', handleOffline)
+  }
+}
+
+/**
+ * Clean up network event listeners
+ * Call this on app unmount or when resetting client state
+ */
+export function cleanupNetworkListeners(): void {
+  if (networkListenersCleanup) {
+    networkListenersCleanup()
+    networkListenersCleanup = null
+  }
+  // Clear all callbacks
+  onlineCallbacks.length = 0
 }

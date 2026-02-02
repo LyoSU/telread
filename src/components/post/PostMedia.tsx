@@ -1,6 +1,6 @@
 import { createSignal, Show, Match, Switch, For, onCleanup, createMemo, createEffect } from 'solid-js'
 import { Portal } from 'solid-js/web'
-import { DEFAULT_ASPECT_RATIO } from '@/config/constants'
+import { DEFAULT_ASPECT_RATIO, MEDIA } from '@/config/constants'
 import type { MessageMedia } from '@/lib/telegram'
 import { useMedia } from '@/lib/query'
 import { mediaController } from '@/lib/media'
@@ -53,8 +53,8 @@ export function PostMedia(props: PostMediaProps) {
     
     return [{
       src: url,
-      width: props.media.width || 1200,
-      height: props.media.height || 800,
+      width: props.media.width || MEDIA.DEFAULT_WIDTH,
+      height: props.media.height || MEDIA.DEFAULT_HEIGHT,
       thumb: props.media.thumb,
     }]
   }
@@ -249,9 +249,12 @@ export function PostMedia(props: PostMediaProps) {
             <div class="space-y-2">
               <For each={props.media.pollAnswers}>
                 {(answer) => {
-                  const percentage = () => props.media.pollVoters && props.media.pollVoters > 0
-                    ? Math.round((answer.voters / props.media.pollVoters!) * 100)
-                    : 0
+                  const percentage = () => {
+                    const voters = props.media.pollVoters
+                    return voters && voters > 0
+                      ? Math.round((answer.voters / voters) * 100)
+                      : 0
+                  }
                   return (
                     <div class="relative">
                       <div
@@ -1096,9 +1099,11 @@ function InlineVideoPlayer(props: {
           
           {/* Duration badge */}
           <Show when={props.media.duration !== undefined}>
-            <div class="px-2 py-1 rounded-lg bg-black/40 text-white text-xs font-medium backdrop-blur-sm">
-              {formatDuration(props.media.duration!)}
-            </div>
+            {(_) => (
+              <div class="px-2 py-1 rounded-lg bg-black/40 text-white text-xs font-medium backdrop-blur-sm">
+                {formatDuration(props.media.duration ?? 0)}
+              </div>
+            )}
           </Show>
         </div>
       </div>

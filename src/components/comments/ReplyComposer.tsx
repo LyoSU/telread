@@ -1,5 +1,6 @@
-import { createSignal, onMount, Show } from 'solid-js'
+import { createSignal, Show } from 'solid-js'
 import { GlassButton } from '@/components/ui'
+import { CommentInput } from './CommentInput'
 
 interface ReplyComposerProps {
   onSubmit: (text: string) => void
@@ -12,7 +13,6 @@ interface ReplyComposerProps {
  */
 export function ReplyComposer(props: ReplyComposerProps) {
   const [text, setText] = createSignal('')
-  let textareaRef: HTMLTextAreaElement | undefined
 
   const handleSubmit = () => {
     const content = text().trim()
@@ -20,37 +20,15 @@ export function ReplyComposer(props: ReplyComposerProps) {
     props.onSubmit(content)
   }
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault()
-      handleSubmit()
-    }
-    if (e.key === 'Escape') {
-      props.onCancel()
-    }
-  }
-
-  const handleInput = (e: InputEvent) => {
-    const target = e.target as HTMLTextAreaElement
-    setText(target.value)
-    target.style.height = 'auto'
-    target.style.height = `${Math.min(target.scrollHeight, 120)}px`
-  }
-
-  // Focus textarea on mount
-  onMount(() => {
-    textareaRef?.focus()
-  })
-
   return (
     <div class="glass rounded-2xl px-4 py-3">
-      <textarea
-        ref={textareaRef}
+      <CommentInput
         value={text()}
-        onInput={handleInput}
-        onKeyDown={handleKeyDown}
-        rows={1}
-        class="w-full bg-transparent resize-none outline-none text-sm text-primary min-h-[24px] max-h-[120px]"
+        onInput={setText}
+        onSubmit={handleSubmit}
+        onEscape={props.onCancel}
+        autofocus
+        maxHeight={120}
       />
 
       <Show when={text().length > 0 || true}>

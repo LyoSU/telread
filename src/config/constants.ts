@@ -5,6 +5,59 @@
  */
 
 // ============================================================================
+// Timing Constants (in milliseconds)
+// ============================================================================
+
+export const TIMING = {
+  /** Delay before fading out splash screen */
+  SPLASH_FADE_DELAY: 150,
+  /** Service worker update check interval (1 hour) */
+  SW_UPDATE_INTERVAL: 60 * 60 * 1000,
+  /** Activity tracking update interval (5 minutes) */
+  ACTIVITY_UPDATE_INTERVAL: 5 * 60 * 1000,
+  /** Query stale time for folders/channels (5 minutes) */
+  QUERY_STALE_TIME: 5 * 60 * 1000,
+  /** Query garbage collection time (10 minutes) */
+  QUERY_GC_TIME: 10 * 60 * 1000,
+  /** Delay before restoring scroll position */
+  SCROLL_RESTORE_DELAY: 50,
+  /** Page transition duration */
+  PAGE_TRANSITION_DELAY: 150,
+}
+
+// ============================================================================
+// UI Configuration
+// ============================================================================
+
+export const UI = {
+  /** Initial number of posts to render in timeline */
+  INITIAL_RENDER_COUNT: 15,
+  /** Number of posts to add when scrolling */
+  RENDER_BATCH_SIZE: 10,
+  /** Character count threshold for text truncation */
+  TRUNCATE_THRESHOLD: 280,
+  /** Root margin for intersection observer */
+  OBSERVER_ROOT_MARGIN: '100px',
+}
+
+// ============================================================================
+// Media Configuration
+// ============================================================================
+
+export const MEDIA = {
+  /** Default image width when not specified */
+  DEFAULT_WIDTH: 1200,
+  /** Default image height when not specified */
+  DEFAULT_HEIGHT: 800,
+  /** Size for color extraction sampling */
+  COLOR_EXTRACT_SIZE: 50,
+  /** Minimum brightness threshold for color extraction */
+  BRIGHTNESS_MIN: 30,
+  /** Maximum brightness threshold for color extraction */
+  BRIGHTNESS_MAX: 225,
+}
+
+// ============================================================================
 // API Limits
 // ============================================================================
 

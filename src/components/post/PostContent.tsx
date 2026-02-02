@@ -1,4 +1,4 @@
-import { For, createMemo, createSignal } from 'solid-js'
+import { For, createMemo, createSignal, type JSX } from 'solid-js'
 import type { MessageEntity } from '@/lib/telegram'
 
 interface PostContentProps {
@@ -31,7 +31,7 @@ const URL_REGEX = /^(https?:\/\/|www\.)\S+$/i
 /**
  * Wrap text with a single entity type
  */
-function EntityTag(props: { type: string; url?: string; text: string; children: any }) {
+function EntityTag(props: { type: string; url?: string; text: string; children: JSX.Element }) {
   const { type, url, text, children } = props
 
   switch (type) {
@@ -101,7 +101,7 @@ function EntityTag(props: { type: string; url?: string; text: string; children: 
   }
 }
 
-function SpoilerTag(props: { children: any }) {
+function SpoilerTag(props: { children: JSX.Element }) {
   const [revealed, setRevealed] = createSignal(false)
   
   return (
@@ -151,7 +151,7 @@ function SegmentRenderer(props: { segment: TextSegment }) {
   const sorted = [...entities].sort((a, b) => (PRIORITY[a.type] ?? 99) - (PRIORITY[b.type] ?? 99))
 
   // Build content (innermost)
-  let content: any = text
+  let content: JSX.Element = <>{text}</>
 
   // Wrap with entities from inside out (reverse order)
   for (let i = sorted.length - 1; i >= 0; i--) {

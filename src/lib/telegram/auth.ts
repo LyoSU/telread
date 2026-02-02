@@ -132,17 +132,17 @@ export async function submit2FA(
   }
 }
 
-// Store for cancelling active QR polling
-let cancelQRPolling: (() => void) | null = null
+// AbortController for cancelling active QR polling
+let qrAbortController: AbortController | null = null
 
 /**
  * Stop any active QR polling
  * Call this when navigating away from QR login screen
  */
 export function stopQRAuth(): void {
-  if (cancelQRPolling) {
-    cancelQRPolling()
-    cancelQRPolling = null
+  if (qrAbortController) {
+    qrAbortController.abort()
+    qrAbortController = null
   }
 }
 
@@ -189,25 +189,25 @@ function pollQRLogin(
   callbacks: AuthCallbacks
 ): void {
   const client = getTelegramClient()
-  let cancelled = false
+
+  // Create new AbortController for this polling session
+  const abortController = new AbortController()
+  qrAbortController = abortController
+  const signal = abortController.signal
+
   let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-  // Store cancel function globally
-  cancelQRPolling = () => {
-    cancelled = true
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-      timeoutId = null
-    }
-  }
-
   const poll = async () => {
-    if (cancelled) return
-    
+    if (signal.aborted) return
+
     if (Date.now() / 1000 > expires) {
-      // Token expired, get a new one (if not cancelled)
-      if (!cancelled) {
-        startQRAuth(callbacks)
+      // Token expired, get a new one (if not aborted)
+      if (!signal.aborted) {
+        try {
+          await startQRAuth(callbacks)
+        } catch (error) {
+          console.error('[QR Auth] Failed to refresh expired token:', error)
+        }
       }
       return
     }
@@ -220,23 +220,23 @@ function pollQRLogin(
         exceptIds: [],
       })
 
-      if (cancelled) return
+      if (signal.aborted) return
 
       if (result._ === 'auth.loginTokenSuccess') {
-        cancelQRPolling = null
+        qrAbortController = null
         callbacks.onStateChange({ step: 'done' })
         return
       }
 
-      if (!cancelled) {
+      if (!signal.aborted) {
         timeoutId = setTimeout(poll, 2000)
       }
     } catch (error: unknown) {
-      if (cancelled) return
-      
+      if (signal.aborted) return
+
       // Use typed error check for 2FA
       if (is2FARequired(error)) {
-        cancelQRPolling = null
+        qrAbortController = null
         try {
           const passwordInfo = await client.call({ _: 'account.getPassword' })
           callbacks.onStateChange({
@@ -252,11 +252,21 @@ function pollQRLogin(
         return
       }
 
-      if (!cancelled) {
+      if (!signal.aborted) {
         timeoutId = setTimeout(poll, 2000)
       }
     }
   }
 
-  poll()
+  // Clear timeout when aborted
+  signal.addEventListener('abort', () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+      timeoutId = null
+    }
+  })
+
+  poll().catch((error) => {
+    console.error('[QR Auth] Poll error:', error)
+  })
 }

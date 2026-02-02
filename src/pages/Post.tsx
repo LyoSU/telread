@@ -73,11 +73,11 @@ function Post() {
     if (!posts) return null
 
     return posts
-      .filter((p) => p.media)
+      .filter((p): p is Message & { media: NonNullable<Message['media']> } => p.media != null)
       .map((p) => ({
         channelId: p.channelId,
         messageId: p.id,
-        media: p.media!,
+        media: p.media,
       }))
   })
 
@@ -154,7 +154,7 @@ function Post() {
           class="post"
         >
           {/* Forward indicator */}
-          <Show when={postQuery.data!.forward}>
+          <Show when={postQuery.data?.forward}>
             {(forward) => (
               <button
                 type="button"
@@ -180,40 +180,44 @@ function Post() {
 
           {/* Header */}
           <div class="post-header cursor-pointer" onClick={handleChannelClick}>
-            <ChannelAvatar channelId={channelId()} name={channel()!.title} size="md" />
+            <ChannelAvatar channelId={channelId()} name={channel()?.title ?? ''} size="md" />
             <div class="flex-1 min-w-0 overflow-hidden">
               <p class="font-semibold text-primary hover:underline truncate max-w-full">
-                {channel()!.title}
+                {channel()?.title}
               </p>
               <p class="text-sm text-tertiary">
-                {formatDate(postQuery.data!.date)}
+                {postQuery.data ? formatDate(postQuery.data.date) : ''}
               </p>
             </div>
           </div>
 
           {/* Text content - full, no truncation */}
-          <Show when={postQuery.data!.text}>
-            <div class="post-content">
-              <PostContent
-                text={postQuery.data!.text}
-                entities={postQuery.data!.entities}
-              />
-            </div>
+          <Show when={postQuery.data?.text}>
+            {(text) => (
+              <div class="post-content">
+                <PostContent
+                  text={text()}
+                  entities={postQuery.data?.entities}
+                />
+              </div>
+            )}
           </Show>
 
           {/* Media - gallery for groups, single for regular posts */}
           <Show
             when={mediaItems()}
             fallback={
-              <Show when={postQuery.data!.media}>
-                <div class="post-media">
-                  <PostMedia
-                    channelId={channelId()}
-                    messageId={messageId()}
-                    media={postQuery.data!.media!}
-                    class="mx-4 rounded-2xl overflow-hidden"
-                  />
-                </div>
+              <Show when={postQuery.data?.media}>
+                {(media) => (
+                  <div class="post-media">
+                    <PostMedia
+                      channelId={channelId()}
+                      messageId={messageId()}
+                      media={media()}
+                      class="mx-4 rounded-2xl overflow-hidden"
+                    />
+                  </div>
+                )}
               </Show>
             }
           >
@@ -229,17 +233,17 @@ function Post() {
             <PostActions
               channelId={channelId()}
               messageId={messageId()}
-              channelTitle={channel()!.title}
-              preview={postQuery.data!.text}
-              views={postQuery.data!.views}
-              replies={postQuery.data!.replies}
-              reactions={postQuery.data!.reactions}
+              channelTitle={channel()?.title ?? ''}
+              preview={postQuery.data?.text}
+              views={postQuery.data?.views}
+              replies={postQuery.data?.replies}
+              reactions={postQuery.data?.reactions}
             />
           </div>
         </Motion.article>
 
         {/* Comments section - only if channel has comments enabled */}
-        <Show when={postQuery.data!.replies !== undefined}>
+        <Show when={postQuery.data?.replies !== undefined}>
           <div class="px-4 pt-4 pb-4">
             <CommentSection
               channelId={channelId()}
