@@ -1,8 +1,7 @@
 import { Show, createMemo } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
-import { ChannelAvatar } from '@/components/ui'
+import { ChannelAvatar, TimeAgo } from '@/components/ui'
 import { PostContent, PostActions, MediaGallery } from '@/components/post'
-import { formatTimeAgo, globalNow } from '@/lib/utils'
 import { CornerDownRight } from 'lucide-solid'
 import type { Message } from '@/lib/telegram'
 
@@ -57,12 +56,6 @@ export function TimelineGroup(props: TimelineGroupProps) {
     navigate(channelUrl())
   }
 
-  // Memoize with global time signal for periodic updates
-  const timeAgo = createMemo(() => {
-    globalNow() // Subscribe to minute-by-minute time updates
-    return formatTimeAgo(primaryPost().date)
-  })
-
   return (
     <article class="post cursor-pointer" onClick={handlePostClick}>
       {/* Forward indicator */}
@@ -99,7 +92,7 @@ export function TimelineGroup(props: TimelineGroupProps) {
             {props.channelTitle}
           </button>
           <div class="flex items-center gap-1 text-sm text-tertiary">
-            <span>{timeAgo()}</span>
+            <TimeAgo date={primaryPost().date} />
             <Show when={primaryPost().editDate}>
               <span>· edited</span>
             </Show>

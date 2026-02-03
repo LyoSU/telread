@@ -110,7 +110,7 @@ export function MainLayout(props: ParentProps) {
       </aside>
 
       {/* Main content area */}
-      <main ref={mainRef} class="flex-1 h-screen overflow-y-auto custom-scrollbar">
+      <main ref={mainRef} class="flex-1 h-screen overflow-y-auto custom-scrollbar main-scroll-container">
         {/* Centered content - wider feed like Threads */}
         <div class="max-w-2xl mx-auto w-full min-h-full lg:border-x border-[var(--nav-border)]">
           <PageTransition>

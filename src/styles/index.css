@@ -1196,6 +1196,19 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   SCROLL ANCHORING: Prevent scroll jump when content is inserted
+   ═══════════════════════════════════════════════════════════════════════════ */
+.main-scroll-container {
+  overflow-anchor: auto;
+}
+
+/* Don't anchor to sticky/floating elements */
+.new-posts-btn,
+.sticky {
+  overflow-anchor: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    PERFORMANCE: GPU hints for animations
    ═══════════════════════════════════════════════════════════════════════════ */
 .floating-glass,

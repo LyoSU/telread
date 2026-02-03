@@ -1,7 +1,6 @@
-import { Show, For, createMemo } from 'solid-js'
-import { UserAvatar } from '@/components/ui'
+import { Show, For } from 'solid-js'
+import { UserAvatar, TimeAgo } from '@/components/ui'
 import { PostContent, PostMedia } from '@/components/post'
-import { formatRelativeTime, globalNow } from '@/lib/utils'
 import type { Comment } from '@/lib/telegram'
 import { CornerDownRight, ChevronDown } from 'lucide-solid'
 import type { CommentActionsContext } from './CommentThread'
@@ -25,12 +24,6 @@ interface CommentItemProps {
  * Content on right with author, time, text, media, reactions.
  */
 export function CommentItem(props: CommentItemProps) {
-  // Reactive time display - updates when globalNow changes
-  const timeAgo = createMemo(() => {
-    globalNow() // Subscribe to time updates
-    return formatRelativeTime(props.comment.date)
-  })
-
   return (
     <div class="flex gap-3">
       {/* Avatar column with thread line */}
@@ -77,9 +70,7 @@ export function CommentItem(props: CommentItemProps) {
           <span class="font-medium text-primary text-sm truncate">
             {props.comment.author.name}
           </span>
-          <span class="text-xs text-tertiary flex-shrink-0">
-            {timeAgo()}
-          </span>
+          <TimeAgo date={props.comment.date} relative class="text-xs text-tertiary flex-shrink-0" />
         </div>
 
         {/* Text with entities */}

@@ -1,8 +1,7 @@
 import { Show, createMemo } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
-import { ChannelAvatar } from '@/components/ui'
+import { ChannelAvatar, TimeAgo } from '@/components/ui'
 import { PostContent, PostMedia, PostActions } from '@/components/post'
-import { formatTimeAgo, globalNow } from '@/lib/utils'
 import { CornerDownRight } from 'lucide-solid'
 import type { Message } from '@/lib/telegram'
 import { UI } from '@/config/constants'
@@ -45,12 +44,6 @@ export function TimelinePost(props: TimelinePostProps) {
     e.stopPropagation()
     navigate(channelUrl())
   }
-
-  // Memoize with global time signal for periodic updates
-  const timeAgo = createMemo(() => {
-    globalNow() // Subscribe to minute-by-minute time updates
-    return formatTimeAgo(props.post.date)
-  })
 
   // Check if text is long enough to be truncated
   const isTruncated = createMemo(() => {
@@ -96,7 +89,7 @@ export function TimelinePost(props: TimelinePostProps) {
             {props.channelTitle}
           </button>
           <div class="flex items-center gap-1 text-sm text-tertiary">
-            <span>{timeAgo()}</span>
+            <TimeAgo date={props.post.date} />
             <Show when={props.post.editDate}>
               <span>· edited</span>
             </Show>
