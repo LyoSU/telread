@@ -60,15 +60,18 @@ export function useMedia(
 /**
  * Hook to download a profile photo
  * Cache is checked in downloadProfilePhoto: RAM -> IndexedDB -> API
+ * 
+ * @param priority - Download priority: 'high' for visible avatars
  */
 export function useProfilePhoto(
   peerId: () => number,
   size: 'small' | 'big' = 'small',
-  enabled?: () => boolean
+  enabled?: () => boolean,
+  priority?: () => MediaPriority
 ) {
   return createQuery(() => ({
     queryKey: queryKeys.media.profile(peerId(), size),
-    queryFn: () => downloadProfilePhoto(peerId(), size),
+    queryFn: () => downloadProfilePhoto(peerId(), size, priority?.() ?? 'high'),
     staleTime: Infinity, // Never stale - cache checked in queryFn
     gcTime: 1000 * 60 * 60, // 1 hour in query cache
     retry: shouldRetryMedia,

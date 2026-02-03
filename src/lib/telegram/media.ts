@@ -784,8 +784,8 @@ export async function downloadProfilePhoto(
 
   const client = getTelegramClient()
 
-  // Use separate queue for profile photos
-  await profileQueue.acquire()
+  // Use separate queue for profile photos (with priority)
+  await profileQueue.acquire(priority)
 
   try {
     const peer = await resolvePeerWithPhoto(client, peerId)
