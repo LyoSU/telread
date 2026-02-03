@@ -7,6 +7,7 @@ import { CommentSection } from '@/components/comments'
 import { usePost } from '@/lib/query/hooks/usePost'
 import { useResolveChannel, useChannelInfo } from '@/lib/query/hooks/useChannels'
 import { postsState } from '@/lib/store/posts'
+import { getChannel, getChannelByUsername } from '@/lib/store/channels'
 import { openChannel, closeChannel } from '@/lib/telegram/openChats'
 import { ChevronLeft, CornerDownRight } from 'lucide-solid'
 import type { Message } from '@/lib/telegram/messages'
@@ -22,22 +23,41 @@ function Post() {
   const params = useParams()
   const navigate = useNavigate()
 
-  // Resolve channel from ID or username param
+  // Quick resolve from store first (instant if channel is known)
+  const storeChannel = createMemo(() => {
+    if (params.channelId) {
+      return getChannel(parseInt(params.channelId, 10))
+    }
+    if (params.username) {
+      return getChannelByUsername(params.username)
+    }
+    return undefined
+  })
+
+  // Channel ID - prefer store lookup, fallback to query
+  const channelId = createMemo(() => {
+    const fromStore = storeChannel()
+    if (fromStore) return fromStore.id
+    return resolvedChannel.channelId()
+  })
+
+  // Only use query as fallback if not in store
   const idOrUsername = createMemo(() => {
+    // If already found in store, don't need to resolve
+    if (storeChannel()) return undefined
     if (params.channelId) return parseInt(params.channelId, 10)
     if (params.username) return params.username
     return undefined
   })
 
   const resolvedChannel = useResolveChannel(idOrUsername)
-  const channelId = resolvedChannel.channelId
   const messageId = () => parseInt(params.messageId ?? '0', 10)
 
   const postQuery = usePost(channelId, messageId)
   const channelInfoQuery = useChannelInfo(channelId)
 
-  // Use resolved channel or full info
-  const channel = createMemo(() => channelInfoQuery.data ?? resolvedChannel.data)
+  // Use store channel, resolved channel, or full info
+  const channel = createMemo(() => storeChannel() ?? channelInfoQuery.data ?? resolvedChannel.data)
 
   // Open channel for real-time updates (new comments, reactions)
   createEffect(() => {
@@ -105,8 +125,16 @@ function Post() {
   }
 
   const hasData = () => postQuery.data && channel()
-  const isLoading = () => !hasData() && (postQuery.isLoading || resolvedChannel.isLoading || resolvedChannel.isFetching)
-  const isError = () => !hasData() && (postQuery.isError || resolvedChannel.isError)
+  // Only show loading if we don't have data AND something is actually loading
+  // If channel is from store, don't wait for resolvedChannel
+  const isLoading = () => {
+    if (hasData()) return false
+    // If channel is in store, only check postQuery
+    if (storeChannel()) return postQuery.isLoading
+    // Otherwise check both
+    return postQuery.isLoading || resolvedChannel.isLoading || resolvedChannel.isFetching
+  }
+  const isError = () => !hasData() && (postQuery.isError || (!storeChannel() && resolvedChannel.isError))
 
   return (
     <div class="min-h-full pb-24">

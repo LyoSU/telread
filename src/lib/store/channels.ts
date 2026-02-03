@@ -160,6 +160,21 @@ export function getChannel(channelId: number): ChannelWithLastMessage | undefine
 }
 
 /**
+ * Get channel by username (case-insensitive)
+ * Used for instant resolve when navigating via username URL
+ */
+export function getChannelByUsername(username: string): ChannelWithLastMessage | undefined {
+  const lowerUsername = username.toLowerCase()
+  for (const id of state.ids) {
+    const channel = state.byId[id]
+    if (channel?.username?.toLowerCase() === lowerUsername) {
+      return channel
+    }
+  }
+  return undefined
+}
+
+/**
  * Get all channels as array (reactive)
  */
 export function getChannels(): ChannelWithLastMessage[] {

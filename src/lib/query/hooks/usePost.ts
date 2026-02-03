@@ -22,7 +22,6 @@ export function usePost(
     const cid = channelId()
     const mid = messageId()
     if (cid === 0 || mid === 0) return undefined
-    // Access byId reactively (will update when store changes)
     return postsState.byId[`${cid}:${mid}`] as Message | undefined
   })
   

@@ -26,6 +26,7 @@ export {
   upsertChannel,
   hasChannel,
   getChannel,
+  getChannelByUsername,
   getChannels,
   getAllChannels,
   createChannelMap,
