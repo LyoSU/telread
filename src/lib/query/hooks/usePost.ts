@@ -1,63 +1,74 @@
 import { createQuery, createMutation } from '@tanstack/solid-query'
+import { createMemo } from 'solid-js'
 import { getMessage, sendReaction, getAvailableReactions, type Message } from '@/lib/telegram'
-import { updatePostReactionsImmediate, getPost, upsertPosts } from '@/lib/store'
+import { updatePostReactionsImmediate, getPost, upsertPosts, postsState } from '@/lib/store'
 import { queryClient } from '../client'
 import { queryKeys } from '../keys'
 import type { TimelineData } from './useTimeline'
 
 /**
  * Hook to fetch a single post/message
- * Checks multiple cache levels before making API call:
- * 1. postsState (RAM) - fastest
- * 2. TanStack Query cache (may be from IndexedDB) 
- * 3. Timeline channels lastMessage
- * 4. API call (slowest)
+ * 
+ * Uses postsState store as primary source (instant, reactive).
+ * Falls back to API fetch only when post is not in store.
  */
 export function usePost(
   channelId: () => number,
   messageId: () => number,
   enabled?: () => boolean
 ) {
-  return createQuery(() => {
+  // Reactive lookup from store - instant when post exists
+  const storePost = createMemo(() => {
     const cid = channelId()
     const mid = messageId()
-    
-    // Check store synchronously for instant display
-    const cachedPost = getPost(cid, mid)
+    if (cid === 0 || mid === 0) return undefined
+    // Access byId reactively (will update when store changes)
+    return postsState.byId[`${cid}:${mid}`] as Message | undefined
+  })
+  
+  // Query only runs if post is NOT in store
+  const query = createQuery(() => {
+    const cid = channelId()
+    const mid = messageId()
+    const isValid = cid !== 0 && mid !== 0
+    const hasStoreData = !!storePost()
     
     return {
       queryKey: queryKeys.messages.detail(cid, mid),
       queryFn: async () => {
-        // Double-check store (may have been populated since query started)
+        // Double-check store
         const fromStore = getPost(cid, mid)
         if (fromStore) return fromStore
         
-        // Check timeline cache - might have this post as lastMessage
+        // Check timeline lastMessage
         const timelineData = queryClient.getQueryData<TimelineData>(queryKeys.timeline.all)
-        if (timelineData) {
-          const channel = timelineData.channels.find(c => c.id === cid)
-          if (channel?.lastMessage?.id === mid) {
-            upsertPosts([channel.lastMessage])
-            return channel.lastMessage
-          }
+        const channel = timelineData?.channels.find(c => c.id === cid)
+        if (channel?.lastMessage?.id === mid) {
+          upsertPosts([channel.lastMessage])
+          return channel.lastMessage
         }
         
-        // Fallback to API
+        // Fetch from API
         const post = await getMessage(cid, mid)
-        if (post) {
-          upsertPosts([post])
-        }
+        if (post) upsertPosts([post])
         return post
       },
-      // Instant display from store - no loading state if data exists
-      initialData: cachedPost,
-      // Tell TanStack Query the cached data is fresh (just loaded from timeline)
-      initialDataUpdatedAt: cachedPost ? Date.now() : undefined,
-      staleTime: 1000 * 60 * 30, // 30 minutes
-      enabled: enabled?.() ?? true,
+      staleTime: 1000 * 60 * 30,
+      // Only fetch if: enabled AND valid IDs AND NOT already in store
+      enabled: (enabled?.() ?? true) && isValid && !hasStoreData,
       refetchOnMount: false,
+      refetchOnWindowFocus: false,
     }
   })
+  
+  // Return combined result - prefer store, fallback to query
+  return {
+    get data() { return storePost() ?? query.data },
+    get isLoading() { return !storePost() && query.isLoading },
+    get isError() { return !storePost() && query.isError },
+    get error() { return query.error },
+    refetch: query.refetch,
+  }
 }
 
 /**
