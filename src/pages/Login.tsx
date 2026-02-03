@@ -1,7 +1,8 @@
 import { useNavigate } from '@solidjs/router'
 import { AuthFlow } from '@/components/auth'
-import { authStore } from '@/lib/store'
-import { getTelegramClient, setClientReady, startUpdatesListener } from '@/lib/telegram'
+import { authStore } from '@/lib/store/auth'
+import { getTelegramClient, setClientReady } from '@/lib/telegram/client'
+import { startUpdatesListener } from '@/lib/telegram/updates'
 
 /**
  * Login page wrapper

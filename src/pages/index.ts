@@ -1,9 +1,10 @@
-import Home from './Home'
-import Channel from './Channel'
-import Channels from './Channels'
-import Post from './Post'
-import Bookmarks from './Bookmarks'
-import Settings from './Settings'
-import Login from './Login'
+// Type-only exports for tree shaking
+// Pages are lazy-loaded in App.tsx using dynamic imports
 
-export { Home, Channel, Channels, Post, Bookmarks, Settings, Login }
+export type { default as Home } from './Home'
+export type { default as Channel } from './Channel'
+export type { default as Channels } from './Channels'
+export type { default as Post } from './Post'
+export type { default as Bookmarks } from './Bookmarks'
+export type { default as Settings } from './Settings'
+export type { default as Login } from './Login'

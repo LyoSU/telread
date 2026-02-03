@@ -1,6 +1,5 @@
 import { onCleanup, createEffect } from 'solid-js'
-import PhotoSwipe from 'photoswipe'
-import 'photoswipe/style.css'
+import type PhotoSwipeType from 'photoswipe'
 
 export interface LightboxItem {
   src: string
@@ -32,6 +31,22 @@ const PSWP_OPTIONS = {
 }
 
 /**
+ * Lazy load PhotoSwipe and its CSS
+ */
+let PhotoSwipe: typeof PhotoSwipeType | null = null
+
+async function loadPhotoSwipe() {
+  if (!PhotoSwipe) {
+    const [pswp] = await Promise.all([
+      import('photoswipe'),
+      import('photoswipe/style.css'),
+    ])
+    PhotoSwipe = pswp.default
+  }
+  return PhotoSwipe
+}
+
+/**
  * Convert LightboxItem to PhotoSwipe data format
  */
 function toDataSource(items: LightboxItem[]) {
@@ -49,12 +64,13 @@ function toDataSource(items: LightboxItem[]) {
  * Features: pinch-to-zoom, swipe navigation, double-tap zoom
  */
 export function Lightbox(props: LightboxProps) {
-  let pswp: PhotoSwipe | null = null
+  let pswp: PhotoSwipeType | null = null
 
-  const openLightbox = () => {
+  const openLightbox = async () => {
     if (pswp || !props.open || props.items.length === 0) return
 
-    pswp = new PhotoSwipe({
+    const PSWP = await loadPhotoSwipe()
+    pswp = new PSWP({
       dataSource: toDataSource(props.items),
       index: props.index,
       ...PSWP_OPTIONS,
@@ -94,14 +110,15 @@ export function Lightbox(props: LightboxProps) {
  * Imperative lightbox API for opening from callbacks
  */
 export function createLightbox() {
-  let pswp: PhotoSwipe | null = null
+  let pswp: PhotoSwipeType | null = null
 
-  const open = (items: LightboxItem[], index = 0) => {
+  const open = async (items: LightboxItem[], index = 0) => {
     if (pswp) {
       pswp.close()
     }
 
-    pswp = new PhotoSwipe({
+    const PSWP = await loadPhotoSwipe()
+    pswp = new PSWP({
       dataSource: toDataSource(items),
       index,
       ...PSWP_OPTIONS,

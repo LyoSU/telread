@@ -1,10 +1,15 @@
 import { onMount, onCleanup, createMemo, createEffect, For, Show, createSignal } from 'solid-js'
 import { Timeline } from '@/components/timeline'
-import { useOptimizedTimeline } from '@/lib/query'
-import { useFolderInfoList } from '@/lib/query'
+import { useOptimizedTimeline } from '@/lib/query/hooks/useTimeline'
+import { useFolderInfoList } from '@/lib/query/hooks/useFolders'
 import { FolderChip } from '@/components/ui'
-import { folderStore, setSelectedFolder, channelsState, hasChannel, upsertChannel, upsertPosts, preferencesStore } from '@/lib/store'
-import { getChannelIdsInFolder, type FolderInfo, getChannel as fetchChannelApi, fetchMessages } from '@/lib/telegram'
+import { folderStore, setSelectedFolder } from '@/lib/store/folders'
+import { channelsState, hasChannel, upsertChannel } from '@/lib/store/channels'
+import { upsertPosts } from '@/lib/store/posts'
+import { preferencesStore } from '@/lib/store/preferences'
+import { getChannelIdsInFolder, type FolderInfo } from '@/lib/telegram/folders'
+import { getChannel as fetchChannelApi } from '@/lib/telegram/channels'
+import { fetchMessages } from '@/lib/telegram/messages'
 
 /**
  * Home page - Unified timeline from all subscribed channels

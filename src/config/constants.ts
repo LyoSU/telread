@@ -46,9 +46,9 @@ export const UI = {
 
 export const MEDIA = {
   /** Default image width when not specified */
-  DEFAULT_WIDTH: 1200,
+  DEFAULT_WIDTH: 400,
   /** Default image height when not specified */
-  DEFAULT_HEIGHT: 800,
+  DEFAULT_HEIGHT: 300,
   /** Size for color extraction sampling */
   COLOR_EXTRACT_SIZE: 50,
   /** Minimum brightness threshold for color extraction */
@@ -108,6 +108,26 @@ export const QUERY_STALE_TIME = 1000 * 60 * 30
 export const QUERY_GC_TIME = 1000 * 60 * 60 * 24
 
 // ============================================================================
+// Query Timing Constants
+// ============================================================================
+
+/**
+ * TanStack Query timing constants for consistent cache behavior
+ */
+export const QUERY = {
+  /** Short stale time for frequently changing data (2 minutes) */
+  STALE_TIME_SHORT: 1000 * 60 * 2,
+  /** Medium stale time for moderately stable data (5 minutes) */
+  STALE_TIME_MEDIUM: 1000 * 60 * 5,
+  /** Long stale time for stable data (30 minutes) */
+  STALE_TIME_LONG: 1000 * 60 * 30,
+  /** Default garbage collection time (10 minutes) */
+  GC_TIME_DEFAULT: 1000 * 60 * 10,
+  /** Long garbage collection time for persistent data (30 minutes) */
+  GC_TIME_LONG: 1000 * 60 * 30,
+}
+
+// ============================================================================
 // UI Configuration
 // ============================================================================
 
@@ -125,3 +145,18 @@ export const SCROLL_THROTTLE_MS = 300
  * Default aspect ratio for media without dimensions
  */
 export const DEFAULT_ASPECT_RATIO = 16 / 9
+
+// ============================================================================
+// Avatar Size Configuration
+// ============================================================================
+
+/**
+ * Avatar sizes in pixels for explicit width/height attributes
+ */
+export const AVATAR_SIZES = {
+  xs: 24,
+  sm: 32,
+  md: 40,
+  lg: 48,
+  xl: 64,
+} as const

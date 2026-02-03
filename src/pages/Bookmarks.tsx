@@ -2,7 +2,7 @@ import { For, Show, createSignal } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
 import { Motion } from 'solid-motionone'
 import { GlassCard, GlassButton, ConfirmDialog } from '@/components/ui'
-import { bookmarksStore } from '@/lib/store'
+import { bookmarksStore } from '@/lib/store/bookmarks'
 import { formatRelativeTime } from '@/lib/utils'
 import { Bookmark, X } from 'lucide-solid'
 

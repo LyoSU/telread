@@ -4,11 +4,12 @@ import { Motion } from 'solid-motionone'
 import { ChannelAvatar, PostSkeleton, ErrorState } from '@/components/ui'
 import { PostContent, PostMedia, PostActions, MediaGallery } from '@/components/post'
 import { CommentSection } from '@/components/comments'
-import { usePost, useResolveChannel, useChannelInfo } from '@/lib/query'
-import { postsState } from '@/lib/store'
-import { openChannel, closeChannel } from '@/lib/telegram'
+import { usePost } from '@/lib/query/hooks/usePost'
+import { useResolveChannel, useChannelInfo } from '@/lib/query/hooks/useChannels'
+import { postsState } from '@/lib/store/posts'
+import { openChannel, closeChannel } from '@/lib/telegram/openChats'
 import { ChevronLeft, CornerDownRight } from 'lucide-solid'
-import type { Message } from '@/lib/telegram'
+import type { Message } from '@/lib/telegram/messages'
 
 /**
  * Post detail page with full content and comments

@@ -87,14 +87,32 @@ export function strippedToDataUrl(stripped: Uint8Array): string | undefined {
 
 /**
  * LRU (Least Recently Used) cache for blob URLs
- * Automatically evicts oldest entries and revokes blob URLs to prevent memory leaks
+ * Automatically evicts oldest entries with delayed blob URL revocation to prevent memory leaks
+ * while allowing components time to finish rendering
  */
 class MediaLRUCache {
   private cache = new Map<string, string>()
   private readonly maxSize: number
+  private pendingRevocations = new Set<string>()
+  private revocationTimer: number | null = null
 
   constructor(maxSize: number) {
     this.maxSize = maxSize
+  }
+
+  /**
+   * Schedule delayed revocation of blob URLs
+   * Waits 30 seconds before revoking to allow components to finish rendering
+   */
+  private scheduleRevocation(): void {
+    if (this.revocationTimer) return
+    this.revocationTimer = window.setTimeout(() => {
+      for (const url of this.pendingRevocations) {
+        URL.revokeObjectURL(url)
+      }
+      this.pendingRevocations.clear()
+      this.revocationTimer = null
+    }, 30000)
   }
 
   get(key: string): string | undefined {
@@ -103,6 +121,8 @@ class MediaLRUCache {
       // Move to end (most recently used)
       this.cache.delete(key)
       this.cache.set(key, value)
+      // If this URL was pending revocation, remove it from the set
+      this.pendingRevocations.delete(value)
     }
     return value
   }
@@ -117,18 +137,24 @@ class MediaLRUCache {
         this.cache.set(key, value)
         return
       }
-      // Different value - just remove from cache, don't revoke
-      // Components may still be rendering the old blob URL
+      // Different value - schedule old URL for delayed revocation
+      if (oldValue) {
+        this.pendingRevocations.add(oldValue)
+        this.scheduleRevocation()
+      }
       this.cache.delete(key)
     }
 
-    // Evict oldest entries if at capacity
-    // NOTE: We intentionally do NOT revoke blob URLs here because React components
-    // may still be rendering them. The browser will garbage collect blobs
-    // automatically when there are no more references.
+    // Evict oldest entries if at capacity with delayed revocation
     while (this.cache.size >= this.maxSize) {
       const oldestKey = this.cache.keys().next().value
       if (oldestKey) {
+        const oldestValue = this.cache.get(oldestKey)
+        if (oldestValue) {
+          // Schedule for delayed revocation instead of immediate
+          this.pendingRevocations.add(oldestValue)
+          this.scheduleRevocation()
+        }
         this.cache.delete(oldestKey)
       }
     }
@@ -156,6 +182,17 @@ class MediaLRUCache {
    * Clear all entries and revoke all blob URLs
    */
   clear(): void {
+    // Clear pending revocations timer
+    if (this.revocationTimer) {
+      window.clearTimeout(this.revocationTimer)
+      this.revocationTimer = null
+    }
+    // Revoke pending URLs
+    for (const url of this.pendingRevocations) {
+      URL.revokeObjectURL(url)
+    }
+    this.pendingRevocations.clear()
+    // Revoke cached URLs
     for (const url of this.cache.values()) {
       URL.revokeObjectURL(url)
     }
@@ -343,17 +380,17 @@ async function cacheProfilePhoto(peerId: number, size: string, buffer: Uint8Arra
 
 /**
  * Detect if running on mobile device
- * Used to reduce concurrent downloads for better performance
+ * Used to adjust concurrent downloads for better performance
  */
 const isMobile = typeof navigator !== 'undefined' && (
   /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
   ('maxTouchPoints' in navigator && navigator.maxTouchPoints > 0)
 )
 
-// Reduce concurrent downloads on mobile to save CPU/battery
-const MAX_MEDIA_DOWNLOADS = isMobile ? 3 : 6
-const MAX_PROFILE_DOWNLOADS = isMobile ? 2 : 4
-const DOWNLOAD_TIMEOUT = isMobile ? 20000 : 15000 // Longer timeout on mobile (slower networks)
+// Increased limits for faster loading
+const MAX_MEDIA_DOWNLOADS = isMobile ? 6 : 10
+const MAX_PROFILE_DOWNLOADS = isMobile ? 3 : 5
+const DOWNLOAD_TIMEOUT = isMobile ? 25000 : 20000
 
 /**
  * Wrap a promise with a timeout
@@ -376,29 +413,66 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   })
 }
 
+export type MediaPriority = 'high' | 'normal' | 'low'
+type Priority = MediaPriority
+
+interface QueueItem {
+  resolve: () => void
+  priority: Priority
+  timestamp: number
+}
+
 /**
- * Creates a semaphore-based download queue
- * Prevents overwhelming the Telegram API with concurrent requests
+ * Creates a priority-based download queue
+ * High priority items (visible media) are processed first
  */
-function createDownloadQueue(maxConcurrent: number) {
+function createPriorityQueue(maxConcurrent: number) {
   let active = 0
-  const queue: Array<() => void> = []
+  const queue: QueueItem[] = []
+
+  const priorityOrder: Record<Priority, number> = {
+    high: 0,
+    normal: 1,
+    low: 2,
+  }
+
+  const sortQueue = () => {
+    queue.sort((a, b) => {
+      // First by priority
+      const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority]
+      if (priorityDiff !== 0) return priorityDiff
+      // Then by timestamp (older first)
+      return a.timestamp - b.timestamp
+    })
+  }
 
   return {
-    acquire(): Promise<void> {
+    acquire(priority: Priority = 'normal'): Promise<void> {
       if (active < maxConcurrent) {
         active++
         return Promise.resolve()
       }
-      return new Promise(resolve => queue.push(resolve))
+      return new Promise(resolve => {
+        queue.push({ resolve, priority, timestamp: Date.now() })
+        sortQueue()
+      })
     },
     release(): void {
       const next = queue.shift()
       if (next) {
-        next()
+        next.resolve()
       } else {
         active--
       }
+    },
+    // Boost priority of an item if it becomes visible
+    boostPriority(predicate: (item: QueueItem) => boolean): void {
+      for (const item of queue) {
+        if (predicate(item) && item.priority !== 'high') {
+          item.priority = 'high'
+        }
+      }
+      sortQueue()
     },
     get pending() {
       return queue.length
@@ -410,8 +484,8 @@ function createDownloadQueue(maxConcurrent: number) {
 }
 
 // Separate queues to prevent profile photos from blocking media
-const mediaQueue = createDownloadQueue(MAX_MEDIA_DOWNLOADS)
-const profileQueue = createDownloadQueue(MAX_PROFILE_DOWNLOADS)
+const mediaQueue = createPriorityQueue(MAX_MEDIA_DOWNLOADS)
+const profileQueue = createPriorityQueue(MAX_PROFILE_DOWNLOADS)
 
 // ============================================================================
 // Debug Logging
@@ -444,12 +518,14 @@ function debugWarn(message: string, ...args: unknown[]) {
  * @param messageId - Message ID
  * @param thumbSize - Optional thumbnail size (small/medium/large)
  * @param signal - Optional AbortSignal for cancellation
+ * @param priority - Download priority (high for visible, normal for prefetch, low for background)
  */
 export async function downloadMedia(
   channelId: number,
   messageId: number,
   thumbSize?: 'small' | 'medium' | 'large',
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  priority: Priority = 'normal'
 ): Promise<string | null> {
   const cacheKey = `${channelId}:${messageId}:${thumbSize ?? 'full'}`
 
@@ -479,8 +555,8 @@ export async function downloadMedia(
 
   const client = getTelegramClient()
 
-  // Wait for available download slot
-  await mediaQueue.acquire()
+  // Wait for available download slot (priority queue)
+  await mediaQueue.acquire(priority)
 
   // Check again after waiting for slot
   if (signal?.aborted) {
@@ -678,10 +754,13 @@ export async function downloadMedia(
  *
  * Uses separate non-evicting memory cache to prevent blob URL revocation
  * while React Query still holds references. Also persists to IndexedDB.
+ * 
+ * @param priority - Download priority (high for visible, normal for prefetch)
  */
 export async function downloadProfilePhoto(
   peerId: number,
-  size: 'small' | 'big' = 'small'
+  size: 'small' | 'big' = 'small',
+  priority: Priority = 'normal'
 ): Promise<string | null> {
   const cacheKey = `profile:${peerId}:${size}`
 
@@ -815,13 +894,15 @@ export async function getVideoStreamUrl(
 
 /**
  * Preload media thumbnails for a batch of messages
+ * Uses low priority to not block visible media downloads
  */
 export async function preloadThumbnails(
-  messages: Array<{ channelId: number; messageId: number }>
+  messages: Array<{ channelId: number; messageId: number }>,
+  priority: Priority = 'low'
 ): Promise<void> {
   await Promise.allSettled(
     messages.map(({ channelId, messageId }) =>
-      downloadMedia(channelId, messageId, 'large')
+      downloadMedia(channelId, messageId, 'large', undefined, priority)
     )
   )
 }
@@ -900,10 +981,14 @@ function getMimeType(media: { type: string; mimeType?: string }): string {
 // ============================================================================
 
 const CLEANUP_INTERVAL_MS = 1000 * 60 * 60 // 1 hour
+const CLEANUP_BATCH_SIZE = 20 // Process this many entries at a time
+const CLEANUP_BATCH_DELAY_MS = 50 // Delay between batches to avoid blocking UI
 let lastCleanupTime = 0
+let cleanupInProgress = false
 
 /**
  * Clean up expired entries from IndexedDB cache
+ * Uses batched processing to avoid blocking the main thread
  * Runs automatically, at most once per hour
  */
 export async function cleanupExpiredCache(): Promise<{ deleted: number }> {
@@ -913,42 +998,71 @@ export async function cleanupExpiredCache(): Promise<{ deleted: number }> {
   if (now - lastCleanupTime < CLEANUP_INTERVAL_MS) {
     return { deleted: 0 }
   }
+
+  // Prevent concurrent cleanup runs
+  if (cleanupInProgress) {
+    return { deleted: 0 }
+  }
+
+  cleanupInProgress = true
   lastCleanupTime = now
 
   let deleted = 0
 
   try {
     const allKeys = await keys()
+    
+    // Filter to only relevant cache keys first (fast string check)
+    const cacheKeys = allKeys.filter((key): key is string => 
+      typeof key === 'string' && 
+      (key.startsWith(MEDIA_CACHE_PREFIX) || key.startsWith(PROFILE_CACHE_PREFIX))
+    )
 
-    for (const key of allKeys) {
-      if (typeof key !== 'string') continue
-
-      // Check media cache entries
-      if (key.startsWith(MEDIA_CACHE_PREFIX)) {
-        const cached = await get<CachedMedia>(key)
-        if (cached && (now - cached.timestamp > MEDIA_CACHE_TTL || cached.version !== MEDIA_CACHE_VERSION)) {
-          await del(key)
-          deleted++
-        }
-      }
-
-      // Check profile photo cache entries
-      if (key.startsWith(PROFILE_CACHE_PREFIX)) {
-        const cached = await get<CachedProfilePhoto>(key)
-        if (cached && (now - cached.timestamp > PROFILE_CACHE_TTL || cached.version !== PROFILE_CACHE_VERSION)) {
-          await del(key)
-          deleted++
-        }
+    // Process in batches to avoid blocking UI
+    for (let i = 0; i < cacheKeys.length; i += CLEANUP_BATCH_SIZE) {
+      const batch = cacheKeys.slice(i, i + CLEANUP_BATCH_SIZE)
+      
+      // Process batch in parallel
+      const results = await Promise.all(
+        batch.map(async (key) => {
+          try {
+            if (key.startsWith(MEDIA_CACHE_PREFIX)) {
+              const cached = await get<CachedMedia>(key)
+              if (cached && (now - cached.timestamp > MEDIA_CACHE_TTL || cached.version !== MEDIA_CACHE_VERSION)) {
+                await del(key)
+                return true
+              }
+            } else if (key.startsWith(PROFILE_CACHE_PREFIX)) {
+              const cached = await get<CachedProfilePhoto>(key)
+              if (cached && (now - cached.timestamp > PROFILE_CACHE_TTL || cached.version !== PROFILE_CACHE_VERSION)) {
+                await del(key)
+                return true
+              }
+            }
+          } catch {
+            // Ignore individual entry errors
+          }
+          return false
+        })
+      )
+      
+      deleted += results.filter(Boolean).length
+      
+      // Small delay between batches to let UI breathe
+      if (i + CLEANUP_BATCH_SIZE < cacheKeys.length) {
+        await new Promise(resolve => setTimeout(resolve, CLEANUP_BATCH_DELAY_MS))
       }
     }
 
     if (import.meta.env.DEV && deleted > 0) {
-      console.log(`[Media] Cleaned up ${deleted} expired cache entries`)
+      console.log(`[Media] Cleaned up ${deleted} expired cache entries from ${cacheKeys.length} total`)
     }
   } catch (error) {
     if (import.meta.env.DEV) {
       console.warn('[Media] Cache cleanup failed:', error)
     }
+  } finally {
+    cleanupInProgress = false
   }
 
   return { deleted }

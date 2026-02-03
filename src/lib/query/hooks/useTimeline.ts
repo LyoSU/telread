@@ -8,6 +8,7 @@ import {
   sliceWithCompleteGroups,
   updateOpenChannels,
   closeAllChannels,
+  preloadThumbnails,
   type Message,
   type ChannelWithLastMessage,
 } from '@/lib/telegram'
@@ -566,6 +567,19 @@ export function useOptimizedTimeline() {
 
         if (allPosts.length > 0) {
           upsertPosts(allPosts)
+          
+          // Prefetch thumbnails for posts with media (low priority, background)
+          const postsWithMedia = allPosts
+            .filter(p => p.media && ['photo', 'video', 'animation', 'document'].includes(p.media.type))
+            .slice(0, 20) // Limit prefetch to first 20 posts
+            .map(p => ({ channelId: p.channelId, messageId: p.id }))
+          
+          if (postsWithMedia.length > 0) {
+            // Delay prefetch to not compete with visible media
+            setTimeout(() => {
+              void preloadThumbnails(postsWithMedia, 'low')
+            }, 1000)
+          }
         }
 
         // Only run initialization once
@@ -630,6 +644,16 @@ export function useOptimizedTimeline() {
         const posts = pages.flat()
         if (posts.length > 0) {
           upsertPosts(posts)
+          
+          // Prefetch thumbnails for new history posts
+          const postsWithMedia = posts
+            .filter(p => p.media && ['photo', 'video', 'animation', 'document'].includes(p.media.type))
+            .slice(0, 10)
+            .map(p => ({ channelId: p.channelId, messageId: p.id }))
+          
+          if (postsWithMedia.length > 0) {
+            void preloadThumbnails(postsWithMedia, 'low')
+          }
         }
       }
     )

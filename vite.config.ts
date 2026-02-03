@@ -99,8 +99,10 @@ export default defineConfig({
       output: {
         manualChunks: {
           'solid-vendor': ['solid-js', '@solidjs/router'],
-          'query-vendor': ['@tanstack/solid-query'],
+          'query-vendor': ['@tanstack/solid-query', '@tanstack/query-persist-client-core', '@tanstack/query-sync-storage-persister'],
           'telegram-vendor': ['@mtcute/web'],
+          'motion-vendor': ['solid-motionone'],
+          'photoswipe-vendor': ['photoswipe'],
         },
       },
     },

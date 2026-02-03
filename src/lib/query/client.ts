@@ -2,6 +2,9 @@ import { QueryClient } from '@tanstack/solid-query'
 import { persistQueryClient, type PersistedClient, type Persister } from '@tanstack/query-persist-client-core'
 import { get, set, del } from 'idb-keyval'
 
+// Detect mobile for performance adjustments
+const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -9,8 +12,8 @@ export const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5,
       // Keep in cache for 10 minutes - aggressively clean up to save memory
       gcTime: 1000 * 60 * 10,
-      // Retry failed requests
-      retry: 2,
+      // Retry failed requests - reduce on mobile to save bandwidth
+      retry: isMobile ? 1 : 2,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       // Don't refetch on window focus - user controls refresh
       refetchOnWindowFocus: false,

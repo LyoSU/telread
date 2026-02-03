@@ -91,7 +91,7 @@ export function PostMedia(props: PostMediaProps) {
         }
       },
       {
-        rootMargin: '400px',
+        rootMargin: '600px', // Preload earlier for smoother experience
         threshold: 0
       }
     )
@@ -115,19 +115,40 @@ export function PostMedia(props: PostMediaProps) {
   return (
     <div ref={setupObserver} class={`relative ${props.class ?? ''}`}>
       <Switch>
-        {/* Photo - shows inline thumbnail first, then full image */}
+        {/* Photo - thumbnail as base, full image fades in on top */}
         <Match when={props.media.type === 'photo'}>
           <div 
             class="relative rounded-2xl overflow-hidden flex-shrink-0 shadow-sm hover:shadow-md transition-shadow" 
             style={containerStyle()}
           >
-            {/* Full image (shows when loaded) */}
+            {/* Base layer: thumbnail with blur (always rendered if available) */}
+            <Show
+              when={props.media.thumb}
+              fallback={<div class="absolute inset-0 skeleton" />}
+            >
+              <img
+                src={props.media.thumb}
+                alt=""
+                class={`absolute inset-0 w-full h-full object-cover blur-sm scale-105 transition-opacity duration-300 ${
+                  mediaQuery.data ? 'opacity-0' : 'opacity-100'
+                }`}
+                loading="lazy"
+                decoding="async"
+                width={props.media.width || MEDIA.DEFAULT_WIDTH}
+                height={props.media.height || MEDIA.DEFAULT_HEIGHT}
+              />
+            </Show>
+            {/* Top layer: full image fades in when loaded */}
             <Show when={mediaQuery.data}>
               {(url) => (
                 <img
                   src={url()}
                   alt="Post media"
-                  class="w-full h-full object-cover cursor-pointer hover:scale-[1.02] transition-transform duration-200 focus:outline-none focus:ring-2 focus:ring-accent"
+                  class="w-full h-full object-cover cursor-pointer hover:scale-[1.02] transition-transform duration-200 focus:outline-none focus:ring-2 focus:ring-accent animate-fade-in"
+                  loading="lazy"
+                  decoding="async"
+                  width={props.media.width || MEDIA.DEFAULT_WIDTH}
+                  height={props.media.height || MEDIA.DEFAULT_HEIGHT}
                   onClick={(e) => {
                     e.stopPropagation()
                     setIsExpanded(true)
@@ -137,19 +158,6 @@ export function PostMedia(props: PostMediaProps) {
                   role="button"
                 />
               )}
-            </Show>
-            {/* Inline thumbnail with blur (shows while full loads) */}
-            <Show when={!mediaQuery.data}>
-              <Show
-                when={props.media.thumb}
-                fallback={<div class="absolute inset-0 skeleton" />}
-              >
-                <img
-                  src={props.media.thumb}
-                  alt=""
-                  class="absolute inset-0 w-full h-full object-cover blur-sm scale-105"
-                />
-              </Show>
             </Show>
           </div>
         </Match>
@@ -363,11 +371,29 @@ export function PostMedia(props: PostMediaProps) {
             <Show when={props.media.webpagePhoto}>
               <div class="relative w-full aspect-[2/1] bg-[var(--bg-secondary)]">
                 <Show when={mediaQuery.data}>
-                  {(url) => <img src={url()} alt="" class="w-full h-full object-cover" />}
+                  {(url) => (
+                    <img
+                      src={url()}
+                      alt=""
+                      class="w-full h-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                      width={props.media.width || MEDIA.DEFAULT_WIDTH}
+                      height={props.media.height || MEDIA.DEFAULT_HEIGHT}
+                    />
+                  )}
                 </Show>
                 <Show when={!mediaQuery.data}>
                   <Show when={props.media.thumb} fallback={<div class="absolute inset-0 skeleton" />}>
-                    <img src={props.media.thumb} alt="" class="absolute inset-0 w-full h-full object-cover blur-sm scale-105" />
+                    <img
+                      src={props.media.thumb}
+                      alt=""
+                      class="absolute inset-0 w-full h-full object-cover blur-sm scale-105"
+                      loading="lazy"
+                      decoding="async"
+                      width={props.media.width || MEDIA.DEFAULT_WIDTH}
+                      height={props.media.height || MEDIA.DEFAULT_HEIGHT}
+                    />
                   </Show>
                 </Show>
               </div>
@@ -704,6 +730,8 @@ function InlineVideoNote(props: {
               loop
               muted
               playsinline
+              preload="metadata"
+              poster={props.media.thumb}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
               onTimeUpdate={() => setCurrentTime(videoRef?.currentTime ?? 0)}
@@ -720,7 +748,15 @@ function InlineVideoNote(props: {
             when={props.media.thumb}
             fallback={<div class="w-full h-full skeleton rounded-full" />}
           >
-            <img src={props.media.thumb} alt="" class="w-full h-full object-cover blur-sm scale-105" />
+            <img
+              src={props.media.thumb}
+              alt=""
+              class="w-full h-full object-cover blur-sm scale-105"
+              loading="lazy"
+              decoding="async"
+              width={props.media.width || MEDIA.DEFAULT_WIDTH}
+              height={props.media.height || MEDIA.DEFAULT_HEIGHT}
+            />
           </Show>
         </Show>
       </div>
@@ -1046,6 +1082,8 @@ function InlineVideoPlayer(props: {
             class="w-full h-full object-cover"
             playsinline
             muted
+            preload="metadata"
+            poster={props.media.thumb}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onEnded={() => setIsPlaying(false)}
@@ -1059,10 +1097,28 @@ function InlineVideoPlayer(props: {
       <Show when={!videoQuery.data}>
         <Show when={thumbQuery.data} fallback={
           <Show when={props.media.thumb} fallback={<div class="absolute inset-0 skeleton" />}>
-            <img src={props.media.thumb} alt="" class="w-full h-full object-cover blur-sm scale-105" />
+            <img
+              src={props.media.thumb}
+              alt=""
+              class="w-full h-full object-cover blur-sm scale-105"
+              loading="lazy"
+              decoding="async"
+              width={props.media.width || MEDIA.DEFAULT_WIDTH}
+              height={props.media.height || MEDIA.DEFAULT_HEIGHT}
+            />
           </Show>
         }>
-          {(url) => <img src={url()} alt="Video thumbnail" class="w-full h-full object-cover" />}
+          {(url) => (
+            <img
+              src={url()}
+              alt="Video thumbnail"
+              class="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
+              width={props.media.width || MEDIA.DEFAULT_WIDTH}
+              height={props.media.height || MEDIA.DEFAULT_HEIGHT}
+            />
+          )}
         </Show>
         {/* Loading indicator */}
         <Show when={videoQuery.isLoading}>
@@ -1135,10 +1191,27 @@ function StickerPlayer(props: {
         {(url) => (
           <Switch>
             <Match when={stickerType() === 'static'}>
-              <img src={url()} alt={props.media.stickerEmoji || 'Sticker'} class="w-full h-full object-contain drop-shadow-md" />
+              <img
+                src={url()}
+                alt={props.media.stickerEmoji || 'Sticker'}
+                class="w-full h-full object-contain drop-shadow-md"
+                loading="lazy"
+                decoding="async"
+                width={props.media.width || 160}
+                height={props.media.height || 160}
+              />
             </Match>
             <Match when={stickerType() === 'video'}>
-              <video src={url()} class="w-full h-full object-contain drop-shadow-md" autoplay muted loop playsinline />
+              <video
+                src={url()}
+                class="w-full h-full object-contain drop-shadow-md"
+                autoplay
+                muted
+                loop
+                playsinline
+                preload="metadata"
+                poster={props.media.thumb}
+              />
             </Match>
             <Match when={stickerType() === 'animated'}>
               <div class="w-full h-full flex items-center justify-center bg-[var(--accent)]/10 rounded-xl">
@@ -1150,7 +1223,15 @@ function StickerPlayer(props: {
       </Show>
       <Show when={!mediaQuery.data}>
         <Show when={props.media.thumb} fallback={<Skeleton class="w-full h-full" rounded="lg" />}>
-          <img src={props.media.thumb} alt="" class="absolute inset-0 w-full h-full object-contain blur-sm" />
+          <img
+            src={props.media.thumb}
+            alt=""
+            class="absolute inset-0 w-full h-full object-contain blur-sm"
+            loading="lazy"
+            decoding="async"
+            width={props.media.width || 160}
+            height={props.media.height || 160}
+          />
         </Show>
       </Show>
     </div>
@@ -1181,12 +1262,29 @@ function GifPlayer(props: {
     >
       <Show when={gifQuery.data}>
         {(url) => (
-          <video src={url()} class="w-full h-full object-cover" autoplay muted loop playsinline />
+          <video
+            src={url()}
+            class="w-full h-full object-cover"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="metadata"
+            poster={props.media.thumb}
+          />
         )}
       </Show>
       <Show when={!gifQuery.data}>
         <Show when={props.media.thumb} fallback={<div class="absolute inset-0 skeleton" />}>
-          <img src={props.media.thumb} alt="" class="absolute inset-0 w-full h-full object-cover blur-sm scale-105" />
+          <img
+            src={props.media.thumb}
+            alt=""
+            class="absolute inset-0 w-full h-full object-cover blur-sm scale-105"
+            loading="lazy"
+            decoding="async"
+            width={props.media.width || MEDIA.DEFAULT_WIDTH}
+            height={props.media.height || MEDIA.DEFAULT_HEIGHT}
+          />
         </Show>
       </Show>
     </div>

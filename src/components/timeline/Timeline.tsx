@@ -1,10 +1,9 @@
-import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
+import { For, Show, createMemo, onCleanup, onMount } from 'solid-js'
 import { TimelinePost } from './TimelinePost'
 import { TimelineGroup } from './TimelineGroup'
 import { PostSkeleton } from '@/components/ui'
-import { INFINITE_SCROLL_THRESHOLD, SCROLL_THROTTLE_MS, UI, TIMING } from '@/config/constants'
+import { INFINITE_SCROLL_THRESHOLD, TIMING } from '@/config/constants'
 import { Newspaper } from 'lucide-solid'
-// Visibility-based openChat removed - simple updateOpenChannels on load is sufficient
 import type { Channel } from '@/lib/telegram'
 import type { Message } from '@/lib/telegram'
 import type { TimelineItem } from '@/lib/utils'
@@ -25,8 +24,41 @@ interface TimelineProps {
 }
 
 /**
+ * Timeline item wrapper with content-visibility optimization
+ * Browser skips rendering of off-screen items automatically
+ */
+function TimelineItemWrapper(props: {
+  item: TimelineItem
+  getChannel: (id: number) => Channel | undefined
+}) {
+  return (
+    <article
+      class="timeline-item"
+      style={{
+        'content-visibility': 'auto',
+        'contain-intrinsic-size': 'auto 400px',
+      }}
+    >
+      <Show
+        when={props.item.type === 'single'}
+        fallback={
+          <GroupPostItem
+            item={props.item as { type: 'group'; posts: Message[]; groupedId: bigint }}
+            getChannel={props.getChannel}
+          />
+        }
+      >
+        <SinglePostItem
+          item={props.item as { type: 'single'; post: Message }}
+          getChannel={props.getChannel}
+        />
+      </Show>
+    </article>
+  )
+}
+
+/**
  * Helper component for single posts
- * Always renders - uses fallback title if channel unknown
  */
 function SinglePostItem(props: {
   item: { type: 'single'; post: Message }
@@ -46,7 +78,6 @@ function SinglePostItem(props: {
 
 /**
  * Helper component for grouped posts
- * Always renders - uses fallback title if channel unknown
  */
 function GroupPostItem(props: {
   item: { type: 'group'; posts: Message[]; groupedId: bigint }
@@ -83,35 +114,22 @@ function getScrollParent(element: HTMLElement | null): HTMLElement | null {
 }
 
 /**
- * Timeline feed component with infinite scroll
+ * Timeline feed component with CSS content-visibility optimization
  *
- * Uses For with keyed items for efficient updates.
- * Scroll events are handled on the nearest scrollable parent.
+ * Uses native browser optimization via content-visibility: auto
+ * Combined with existing IntersectionObserver-based lazy loading for media
  */
 export function Timeline(props: TimelineProps) {
   let containerRef: HTMLDivElement | undefined
   let scrollParent: HTMLElement | null = null
-  let throttleTimer: ReturnType<typeof setTimeout> | null = null
+  let loadMoreRef: HTMLDivElement | undefined
+  let loadMoreObserver: IntersectionObserver | null = null
   let restoreTimer: ReturnType<typeof setTimeout> | null = null
   let rafId: number | null = null
-  let ticking = false
 
-
-  // Incremental rendering - start with few items, render more on scroll
-  const [renderCount, setRenderCount] = createSignal(UI.INITIAL_RENDER_COUNT)
-  
-  // Items to actually render (limited for performance)
-  const visibleItems = createMemo(() => {
-    const items = props.items ?? []
-    const count = renderCount()
-    return items.slice(0, count)
-  })
-  
-  // Check if we need to render more items
-  const hasMoreToRender = createMemo(() => {
-    const items = props.items ?? []
-    return renderCount() < items.length
-  })
+  // Flag to prevent scroll restoration after user has scrolled
+  let hasUserScrolled = false
+  let scrollRestored = false
 
   // Channel lookup map
   const channelMap = createMemo(() => {
@@ -122,126 +140,115 @@ export function Timeline(props: TimelineProps) {
     return map
   })
 
-  // Scroll position storage keys
-  const getScrollKey = () => props.scrollKey ? `timeline-scroll:${props.scrollKey}` : null
-  const getRenderCountKey = () => props.scrollKey ? `timeline-render:${props.scrollKey}` : null
+  // Get channel by ID
+  const getChannel = (channelId: number) => channelMap().get(channelId)
 
-  // Save scroll position and render count to sessionStorage
+  // All items to render
+  const allItems = createMemo(() => props.items ?? [])
+
+  // Scroll position storage keys
+  const getScrollKey = () => (props.scrollKey ? `timeline-scroll:${props.scrollKey}` : null)
+
+  // Save scroll position to sessionStorage
   const saveScrollPosition = () => {
     const scrollKey = getScrollKey()
-    const renderKey = getRenderCountKey()
     if (scrollKey && scrollParent) {
       sessionStorage.setItem(scrollKey, String(scrollParent.scrollTop))
     }
-    if (renderKey) {
-      sessionStorage.setItem(renderKey, String(renderCount()))
-    }
   }
 
-  // Restore render count first (sync), then scroll position (async)
-  const restoreState = () => {
-    const renderKey = getRenderCountKey()
+  // Restore scroll position - only once on mount, before user scrolls
+  const restoreScrollPosition = () => {
+    if (scrollRestored || hasUserScrolled) return
+    scrollRestored = true
+
     const scrollKey = getScrollKey()
-    
-    // Restore render count first so content is available
-    if (renderKey) {
-      const savedRenderCount = sessionStorage.getItem(renderKey)
-      if (savedRenderCount) {
-        const count = parseInt(savedRenderCount, 10)
-        if (!isNaN(count) && count > UI.INITIAL_RENDER_COUNT) {
-          setRenderCount(count)
-        }
-      }
-    }
-    
-    // Then restore scroll position after content renders
     if (scrollKey && scrollParent) {
       const saved = sessionStorage.getItem(scrollKey)
       if (saved) {
         const scrollTop = parseInt(saved, 10)
-        if (!isNaN(scrollTop)) {
-          // Use requestAnimationFrame to ensure content is rendered
+        if (!isNaN(scrollTop) && scrollTop > 0) {
           rafId = requestAnimationFrame(() => {
             rafId = null
-            scrollParent?.scrollTo({ top: scrollTop })
+            if (scrollParent && !hasUserScrolled) {
+              scrollParent.scrollTo({ top: scrollTop })
+            }
           })
         }
       }
     }
   }
 
+  // Handle scroll events
   const handleScroll = () => {
-    // Guard: if scrollParent is null, we've been cleaned up
     if (!scrollParent) return
+    // Mark that user has scrolled - prevents unwanted scroll restoration
+    hasUserScrolled = true
+  }
 
-    const scrollTop = scrollParent.scrollTop
-    const scrollHeight = scrollParent.scrollHeight
-    const clientHeight = scrollParent.clientHeight
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+  // Setup IntersectionObserver for infinite scroll
+  const setupLoadMoreObserver = () => {
+    if (!loadMoreRef) return
 
-    // Save scroll position periodically
-    if (props.scrollKey) {
-      saveScrollPosition()
-    }
+    loadMoreObserver = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (entry?.isIntersecting && !props.isLoadingMore && props.hasMore) {
+          props.onLoadMore()
+        }
+      },
+      {
+        root: scrollParent,
+        rootMargin: `${INFINITE_SCROLL_THRESHOLD}px`,
+        threshold: 0,
+      }
+    )
 
-    // Incremental rendering - NOT throttled (fast, no API call)
-    if (distanceFromBottom < INFINITE_SCROLL_THRESHOLD && hasMoreToRender()) {
-      setRenderCount(prev => Math.min(prev + UI.RENDER_BATCH_SIZE, (props.items?.length ?? 0)))
-    }
-    
-    // API calls - throttled to prevent spam
-    if (ticking) return
-    if (distanceFromBottom < INFINITE_SCROLL_THRESHOLD && !props.isLoadingMore && props.hasMore && !hasMoreToRender()) {
-      ticking = true
-      props.onLoadMore()
-      // Reset throttle after a delay
-      throttleTimer = setTimeout(() => {
-        ticking = false
-        throttleTimer = null
-      }, SCROLL_THROTTLE_MS)
-    }
+    loadMoreObserver.observe(loadMoreRef)
   }
 
   // Setup scroll listener on mount
   onMount(() => {
     scrollParent = getScrollParent(containerRef ?? null)
+
     if (scrollParent) {
       scrollParent.addEventListener('scroll', handleScroll, { passive: true })
-      // Wait for content to be ready then restore state
-      restoreTimer = setTimeout(restoreState, TIMING.SCROLL_RESTORE_DELAY)
+      restoreTimer = setTimeout(restoreScrollPosition, TIMING.SCROLL_RESTORE_DELAY)
     }
+
+    queueMicrotask(setupLoadMoreObserver)
   })
 
   // Cleanup on unmount
   onCleanup(() => {
-    saveScrollPosition()
-    
+    // Only save scroll position if user actually scrolled
+    if (hasUserScrolled) {
+      saveScrollPosition()
+    }
+
     if (scrollParent) {
       scrollParent.removeEventListener('scroll', handleScroll)
-      scrollParent = null // Clear reference to guard handleScroll
+      scrollParent = null
     }
-    
-    if (throttleTimer) {
-      clearTimeout(throttleTimer)
-      throttleTimer = null
+
+    if (loadMoreObserver) {
+      loadMoreObserver.disconnect()
+      loadMoreObserver = null
     }
-    
+
     if (restoreTimer) {
       clearTimeout(restoreTimer)
       restoreTimer = null
     }
-    
+
     if (rafId) {
       cancelAnimationFrame(rafId)
       rafId = null
     }
   })
 
-  // Get channel by ID
-  const getChannel = (channelId: number) => channelMap().get(channelId)
-
-  const isEmpty = () => !props.isLoading && (props.items?.length ?? 0) === 0
-  const showSkeleton = () => props.isLoading && (props.items?.length ?? 0) === 0
+  const isEmpty = () => !props.isLoading && allItems().length === 0
+  const showSkeleton = () => props.isLoading && allItems().length === 0
 
   return (
     <div ref={containerRef} class="min-h-full pb-24">
@@ -253,8 +260,8 @@ export function Timeline(props: TimelineProps) {
           </div>
           <h3 class="text-lg font-semibold text-primary mb-1">No posts yet</h3>
           <p class="text-secondary text-sm mb-4">Subscribe to channels to see posts here</p>
-          <a 
-            href="/channels" 
+          <a
+            href="/channels"
             class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--accent)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
           >
             Add channels
@@ -262,12 +269,12 @@ export function Timeline(props: TimelineProps) {
         </div>
       </Show>
 
-      {/* Loading skeleton - minimal for faster render */}
+      {/* Loading skeleton */}
       <Show when={showSkeleton()}>
         <For each={[1, 2, 3]}>{() => <PostSkeleton />}</For>
       </Show>
 
-      {/* New posts button - Twitter style, positioned below sticky header */}
+      {/* New posts button */}
       <Show when={props.pendingCount && props.pendingCount > 0}>
         <div class="sticky top-14 z-10 flex justify-center py-3 pointer-events-none">
           <button
@@ -283,26 +290,13 @@ export function Timeline(props: TimelineProps) {
         </div>
       </Show>
 
-      {/* Items list - handles both single posts and groups */}
-      {/* Incremental rendering - only render visible items for performance */}
-      <For each={visibleItems()}>
-        {(item) => (
-          <Show
-            when={item.type === 'single'}
-            fallback={
-              <GroupPostItem
-                item={item as { type: 'group'; posts: Message[]; groupedId: bigint }}
-                getChannel={getChannel}
-              />
-            }
-          >
-            <SinglePostItem
-              item={item as { type: 'single'; post: Message }}
-              getChannel={getChannel}
-            />
-          </Show>
-        )}
+      {/* Timeline items with content-visibility optimization */}
+      <For each={allItems()}>
+        {(item) => <TimelineItemWrapper item={item} getChannel={getChannel} />}
       </For>
+
+      {/* Load more trigger */}
+      <div ref={loadMoreRef} class="h-1" aria-hidden="true" />
 
       {/* Load more indicator */}
       <Show when={props.isLoadingMore}>
@@ -312,7 +306,7 @@ export function Timeline(props: TimelineProps) {
       </Show>
 
       {/* End of list */}
-      <Show when={!props.hasMore && !props.isLoadingMore && (props.items?.length ?? 0) > 0}>
+      <Show when={!props.hasMore && !props.isLoadingMore && (props.items ?? []).length > 0}>
         <div class="text-center py-8 text-sm text-tertiary">You've reached the end</div>
       </Show>
     </div>

@@ -65,7 +65,8 @@ export function useComments(
   const query = createQuery(() => ({
     queryKey: queryKeys.comments.thread(channelId(), messageId()),
     queryFn: () => fetchComments(channelId(), messageId()),
-    staleTime: 1000 * 60 * 2, // 2 minutes - comments change more frequently
+    staleTime: 1000 * 60 * 5, // 5 minutes - mobile bandwidth savings
+    gcTime: 1000 * 60 * 30, // 30 minutes - keep loaded comments longer
     enabled: enabled?.() ?? true,
     retry: (failureCount, error) => {
       // Don't retry on validation or disabled errors

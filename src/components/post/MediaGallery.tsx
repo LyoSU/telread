@@ -4,6 +4,7 @@ import { useMedia } from '@/lib/query'
 import { VideoModal, Lightbox, type LightboxItem } from '@/components/ui'
 import { Play } from 'lucide-solid'
 import type { MessageMedia } from '@/lib/telegram'
+import { MEDIA } from '@/config/constants'
 
 interface MediaItem {
   channelId: number
@@ -174,7 +175,7 @@ function GalleryItem(props: {
           setIsVisible(true)
         }
       },
-      { rootMargin: '400px', threshold: 0 }
+      { rootMargin: '600px', threshold: 0 }
     )
     observer.observe(el)
   }
@@ -217,6 +218,22 @@ function GalleryItem(props: {
       }}
       onKeyDown={handleKeyDown}
     >
+      {/* Base layer: thumbnail with blur */}
+      <Show when={props.item.media.thumb} fallback={<div class="absolute inset-0 skeleton" />}>
+        <img
+          src={props.item.media.thumb}
+          alt=""
+          class={`absolute inset-0 w-full h-full object-cover blur-sm scale-105 transition-opacity duration-300 ${
+            mediaQuery.data ? 'opacity-0' : 'opacity-100'
+          }`}
+          loading="lazy"
+          decoding="async"
+          width={props.item.media.width || MEDIA.DEFAULT_WIDTH}
+          height={props.item.media.height || MEDIA.DEFAULT_HEIGHT}
+        />
+      </Show>
+      
+      {/* Top layer: full media fades in */}
       <Show when={mediaQuery.data}>
         {(url) => (
           <Show
@@ -225,27 +242,26 @@ function GalleryItem(props: {
               <img
                 src={url()}
                 alt={`Media ${mediaType()}`}
-                class="w-full h-full object-cover hover:scale-[1.02] transition-transform duration-200"
+                class="w-full h-full object-cover hover:scale-[1.02] transition-transform duration-200 animate-fade-in"
                 loading="lazy"
+                decoding="async"
+                width={props.item.media.width || MEDIA.DEFAULT_WIDTH}
+                height={props.item.media.height || MEDIA.DEFAULT_HEIGHT}
               />
             }
           >
             <video
               src={url()}
-              class="w-full h-full object-cover"
+              class="w-full h-full object-cover animate-fade-in"
               autoplay
               muted
               loop
               playsinline
+              preload="metadata"
+              poster={props.item.media.thumb}
             />
           </Show>
         )}
-      </Show>
-      
-      <Show when={!mediaQuery.data}>
-        <Show when={props.item.media.thumb} fallback={<div class="absolute inset-0 skeleton" />}>
-          <img src={props.item.media.thumb} alt="" class="absolute inset-0 w-full h-full object-cover blur-sm scale-105" />
-        </Show>
       </Show>
 
       <Show when={props.item.media.type === 'video'}>

@@ -1,30 +1,38 @@
 import { Router, Route, Navigate } from '@solidjs/router'
 import { QueryClientProvider } from '@tanstack/solid-query'
-import { Show, onMount, onCleanup, createEffect, on, ErrorBoundary, type ParentProps } from 'solid-js'
-import { queryClient } from '@/lib/query'
-import { authStore, clearPosts } from '@/lib/store'
-import {
-  getTelegramClient,
-  setClientReady,
-  startUpdatesListener,
-  stopUpdatesListener,
-  isUpdatesListenerActive,
-  clearMediaCache,
-} from '@/lib/telegram'
+import { Show, Suspense, lazy, onMount, onCleanup, createEffect, on, ErrorBoundary, type ParentProps } from 'solid-js'
+import { queryClient } from '@/lib/query/client'
+import { authStore } from '@/lib/store/auth'
+import { clearPosts } from '@/lib/store/posts'
+import { getTelegramClient, setClientReady } from '@/lib/telegram/client'
+import { startUpdatesListener, stopUpdatesListener, isUpdatesListenerActive } from '@/lib/telegram/updates'
+import { clearMediaCache } from '@/lib/telegram/media'
 import { validateConfig } from '@/config/telegram'
 import { MainLayout } from '@/layouts'
 import { FullPageError, UpdatePrompt } from '@/components/ui'
 import { MessageCircle } from 'lucide-solid'
 
-import {
-  Home,
-  Channel,
-  Channels,
-  Post,
-  Bookmarks,
-  Settings,
-  Login,
-} from '@/pages'
+// Import Home directly (most used page), lazy load others
+import Home from '@/pages/Home'
+
+// Lazy load page components for code splitting
+const Login = lazy(() => import('@/pages/Login'))
+const Channel = lazy(() => import('@/pages/Channel'))
+const Channels = lazy(() => import('@/pages/Channels'))
+const Post = lazy(() => import('@/pages/Post'))
+const Bookmarks = lazy(() => import('@/pages/Bookmarks'))
+const Settings = lazy(() => import('@/pages/Settings'))
+
+/**
+ * Route loading fallback - minimal skeleton
+ */
+function RouteFallback() {
+  return (
+    <div class="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
+      <div class="w-8 h-8 rounded-full border-2 border-[var(--accent)] border-t-transparent animate-spin" />
+    </div>
+  )
+}
 
 /**
  * Protected route wrapper - redirects to login if not authenticated
@@ -62,6 +70,7 @@ function ProtectedRoute(props: ParentProps) {
 }
 
 // Stable route components - defined outside App to prevent recreation
+// Home is not lazy-loaded (most used page)
 function HomePage() {
   return (
     <ProtectedRoute>
@@ -73,7 +82,9 @@ function HomePage() {
 function ChannelsPage() {
   return (
     <ProtectedRoute>
-      <Channels />
+      <Suspense fallback={<RouteFallback />}>
+        <Channels />
+      </Suspense>
     </ProtectedRoute>
   )
 }
@@ -81,7 +92,9 @@ function ChannelsPage() {
 function ChannelPage() {
   return (
     <ProtectedRoute>
-      <Channel />
+      <Suspense fallback={<RouteFallback />}>
+        <Channel />
+      </Suspense>
     </ProtectedRoute>
   )
 }
@@ -89,7 +102,9 @@ function ChannelPage() {
 function ChannelByUsernamePage() {
   return (
     <ProtectedRoute>
-      <Channel />
+      <Suspense fallback={<RouteFallback />}>
+        <Channel />
+      </Suspense>
     </ProtectedRoute>
   )
 }
@@ -97,7 +112,9 @@ function ChannelByUsernamePage() {
 function PostPage() {
   return (
     <ProtectedRoute>
-      <Post />
+      <Suspense fallback={<RouteFallback />}>
+        <Post />
+      </Suspense>
     </ProtectedRoute>
   )
 }
@@ -105,7 +122,9 @@ function PostPage() {
 function PostByUsernamePage() {
   return (
     <ProtectedRoute>
-      <Post />
+      <Suspense fallback={<RouteFallback />}>
+        <Post />
+      </Suspense>
     </ProtectedRoute>
   )
 }
@@ -113,7 +132,9 @@ function PostByUsernamePage() {
 function BookmarksPage() {
   return (
     <ProtectedRoute>
-      <Bookmarks />
+      <Suspense fallback={<RouteFallback />}>
+        <Bookmarks />
+      </Suspense>
     </ProtectedRoute>
   )
 }
@@ -121,8 +142,18 @@ function BookmarksPage() {
 function SettingsPage() {
   return (
     <ProtectedRoute>
-      <Settings />
+      <Suspense fallback={<RouteFallback />}>
+        <Settings />
+      </Suspense>
     </ProtectedRoute>
+  )
+}
+
+function LoginPage() {
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <Login />
+    </Suspense>
   )
 }
 
@@ -233,7 +264,7 @@ export function App() {
     >
       <QueryClientProvider client={queryClient}>
         <Router base={import.meta.env.BASE_URL.slice(0, -1) || undefined}>
-          <Route path="/login" component={Login} />
+          <Route path="/login" component={LoginPage} />
           <Route path="/" component={HomePage} />
           <Route path="/channels" component={ChannelsPage} />
           <Route path="/channel/:id" component={ChannelPage} />

@@ -1,7 +1,7 @@
 import { For, Show, createSignal } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
 import { GlassCard, GlassButton, GlassInput, ChannelAvatar, Skeleton, InlineError } from '@/components/ui'
-import { useChannels, useJoinChannel } from '@/lib/query'
+import { useChannels, useJoinChannel } from '@/lib/query/hooks/useChannels'
 import { formatCount } from '@/lib/utils'
 import { Plus, Layers, ChevronRight } from 'lucide-solid'
 

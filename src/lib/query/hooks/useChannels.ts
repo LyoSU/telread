@@ -138,10 +138,10 @@ export function useResolveChannel(idOrUsername: () => string | number | undefine
         return getChannel(value)
       },
       enabled: !!value,
-      staleTime: 0,
+      staleTime: 1000 * 60 * 5, // 5 minutes - avoid redundant API calls
       gcTime: 1000 * 60 * 60,
       retry: 2,
-      refetchOnMount: 'always',
+      refetchOnMount: false, // Use cache if available for mobile bandwidth savings
     }
   })
 

@@ -848,7 +848,7 @@
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
   white-space: nowrap;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
@@ -1107,4 +1107,115 @@
   .pswp__button--arrow--next {
     right: calc(env(safe-area-inset-right) + 16px);
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY: Reduced Motion Support
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .page-transition {
+    transition: none;
+  }
+  
+  .skeleton::after {
+    animation: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE: Reduce GPU-heavy effects
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .floating-glass {
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    backdrop-filter: blur(16px) saturate(120%);
+  }
+  
+  .glass-elevated {
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    backdrop-filter: blur(12px) saturate(120%);
+  }
+  
+  .glass {
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    backdrop-filter: blur(12px) saturate(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-glass,
+  .glass,
+  .glass-elevated,
+  .glass-btn,
+  .glass-card,
+  .pill,
+  .reaction-pill {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--color-bg-secondary);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PERFORMANCE: CSS Containment
+   ═══════════════════════════════════════════════════════════════════════════ */
+.timeline-item,
+.post-item {
+  contain: layout style;
+}
+
+.glass-card {
+  contain: layout style paint;
+}
+
+.post-media-container {
+  contain: layout style paint;
+}
+
+.avatar {
+  contain: layout style paint;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE: Touch optimization
+   ═══════════════════════════════════════════════════════════════════════════ */
+.timeline,
+.folder-chips-container,
+.scrollable-content {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PERFORMANCE: GPU hints for animations
+   ═══════════════════════════════════════════════════════════════════════════ */
+.floating-glass,
+.floating-pill,
+.modal-overlay {
+  will-change: transform, opacity;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MEDIA: Smooth image loading animation
+   ═══════════════════════════════════════════════════════════════════════════ */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
 }

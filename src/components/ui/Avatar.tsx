@@ -1,4 +1,5 @@
 import { Show, createMemo } from 'solid-js'
+import { AVATAR_SIZES } from '@/config/constants'
 
 interface AvatarProps {
   src?: string | null
@@ -50,6 +51,8 @@ export function Avatar(props: AvatarProps) {
   })
 
   const bgColor = createMemo(() => getColorFromName(props.name ?? ''))
+  
+  const pixelSize = createMemo(() => AVATAR_SIZES[props.size ?? 'md'])
 
   return (
     <div
@@ -76,6 +79,10 @@ export function Avatar(props: AvatarProps) {
           src={props.src!}
           alt={props.name ?? 'Avatar'}
           class="w-full h-full object-cover"
+          loading="lazy"
+          decoding="async"
+          width={pixelSize()}
+          height={pixelSize()}
         />
       </Show>
     </div>

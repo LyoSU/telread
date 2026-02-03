@@ -125,6 +125,7 @@ export function VideoModal(props: VideoModalProps) {
               controls
               autoplay
               playsinline
+              preload="auto"
               onClick={(e) => e.stopPropagation()}
             />
           )}

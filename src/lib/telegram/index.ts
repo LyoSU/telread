@@ -95,6 +95,7 @@ export {
   removeFromMediaCache,
   getMediaCacheStats,
   cleanupExpiredCache,
+  type MediaPriority,
 } from './media'
 // MTProto error handling utilities
 export {
