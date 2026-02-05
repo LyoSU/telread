@@ -76,39 +76,3 @@ export function groupPostsByMediaGroup(posts: Message[]): TimelineItem[] {
   return result
 }
 
-/**
- * Get the primary post from a timeline item (for metadata like text, date, etc.)
- */
-export function getPrimaryPost(item: TimelineItem): Message {
-  if (item.type === 'single') {
-    return item.post
-  }
-  // For groups, the first post usually has the caption
-  return item.posts.find((p) => p.text) || item.posts[0]
-}
-
-/**
- * Get all media from a timeline item
- */
-export function getMediaItems(item: TimelineItem): Array<{
-  channelId: number
-  messageId: number
-  media: NonNullable<Message['media']>
-}> {
-  if (item.type === 'single') {
-    if (!item.post.media) return []
-    return [{
-      channelId: item.post.channelId,
-      messageId: item.post.id,
-      media: item.post.media,
-    }]
-  }
-
-  return item.posts
-    .filter((p): p is Message & { media: NonNullable<Message['media']> } => p.media != null)
-    .map((p) => ({
-      channelId: p.channelId,
-      messageId: p.id,
-      media: p.media,
-    }))
-}

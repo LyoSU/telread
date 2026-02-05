@@ -71,20 +71,6 @@ export function usePost(
 }
 
 /**
- * Prefetch a post for navigation
- */
-export function usePrefetchPost(queryClient: {
-  prefetchQuery: (options: object) => Promise<void>
-}) {
-  return (channelId: number, messageId: number) => {
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.messages.detail(channelId, messageId),
-      queryFn: () => getMessage(channelId, messageId),
-    })
-  }
-}
-
-/**
  * Hook to fetch available reactions for a channel
  */
 export function useAvailableReactions(channelId: () => number) {

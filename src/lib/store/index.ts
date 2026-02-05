@@ -25,7 +25,6 @@ export {
   getChannel,
   getChannelByUsername,
   getChannels,
-  getAllChannels,
   createChannelMap,
   channelsState,
   restoreChannelsFromCache,

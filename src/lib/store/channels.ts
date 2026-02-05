@@ -182,14 +182,6 @@ export function getChannels(): ChannelWithLastMessage[] {
 }
 
 /**
- * Get all channels (alias for compatibility)
- * Returns the same as getChannels - unfiltered list
- */
-export function getAllChannels(): ChannelWithLastMessage[] {
-  return getChannels()
-}
-
-/**
  * Reactive channel map for efficient lookups
  */
 export function createChannelMap() {

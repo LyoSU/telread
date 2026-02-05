@@ -23,6 +23,8 @@ interface TimelineProps {
   onShowNewPosts?: () => void
   /** Key for scroll position restoration (e.g., 'home', 'channel-123') */
   scrollKey?: string
+  /** Pre-computed channel map — avoids recreating from channels array */
+  channelMap?: Map<number, Channel>
 }
 
 /**
@@ -134,14 +136,16 @@ export function Timeline(props: TimelineProps) {
   let hasUserScrolled = false
   let scrollRestored = false
 
-  // Channel lookup map
-  const channelMap = createMemo(() => {
-    const map = new Map<number, Channel>()
-    for (const c of props.channels) {
-      map.set(c.id, c)
-    }
-    return map
-  })
+  // Channel lookup — use pre-computed map if provided, otherwise build from array
+  const channelMap = props.channelMap
+    ? () => props.channelMap!
+    : createMemo(() => {
+        const map = new Map<number, Channel>()
+        for (const c of props.channels) {
+          map.set(c.id, c)
+        }
+        return map
+      })
 
   // Get channel by ID
   const getChannel = (channelId: number) => channelMap().get(channelId)

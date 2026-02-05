@@ -1,6 +1,6 @@
 export { useChannels, useChannel, useChannelInfo, useJoinChannel, useLeaveChannel, useResolveChannel } from './useChannels'
 export { useMessages, useInfiniteMessages, useOptimizedTimeline } from './useTimeline'
-export { usePost, usePrefetchPost, useAvailableReactions, useSendReaction } from './usePost'
+export { usePost, useAvailableReactions, useSendReaction } from './usePost'
 export { useComments, useSendComment } from './useComments'
 export { useMedia, useProfilePhoto } from './useMedia'
 export { useFolders, useFolderInfoList, useFolder } from './useFolders'

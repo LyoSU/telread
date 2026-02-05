@@ -13,7 +13,7 @@ const FILTERS_CACHE_TTL_MS = TIMING.QUERY_STALE_TIME
 const FOLDER_CHANNELS_CACHE_TTL_MS = TIMING.QUERY_STALE_TIME
 
 /** Maximum dialogs to iterate when fetching broadcast channels */
-const MAX_DIALOGS_TO_ITERATE = 200
+const MAX_FOLDER_DIALOGS = 200
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -230,7 +230,7 @@ async function fetchBroadcastChannelIds(): Promise<number[]> {
         const iterator = client.iterDialogs()[Symbol.asyncIterator]()
         let count = 0
 
-        while (count < MAX_DIALOGS_TO_ITERATE) {
+        while (count < MAX_FOLDER_DIALOGS) {
             try {
                 const { value: dialog, done } = await iterator.next()
                 if (done) break
@@ -399,9 +399,10 @@ function extractPeerIds(peers: tl.TypeInputPeer[]): number[] {
  * Count how many channels from the given list are in this filter
  */
 function countChannelsInFilter(filter: DialogFilter, channelIds: number[]): number {
-    // If filter explicitly includes peers, check intersection
+    // If filter explicitly includes peers, check intersection using Set for O(1) lookup
     if (filter.includePeers.length > 0) {
-        return channelIds.filter(id => filter.includePeers.includes(id)).length
+        const includedSet = new Set(filter.includePeers)
+        return channelIds.filter(id => includedSet.has(id)).length
     }
 
     // If filter uses broadcasts flag, count all channels

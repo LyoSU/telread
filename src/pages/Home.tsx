@@ -259,6 +259,7 @@ function Home() {
             <Timeline
                 items={timeline.timeline}
                 channels={timeline.allChannels}
+                channelMap={timeline.channelMap}
                 isLoading={timeline.isLoading}
                 isLoadingMore={timeline.isLoadingMore}
                 hasMore={timeline.hasMore}

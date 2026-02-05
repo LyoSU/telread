@@ -43,7 +43,7 @@ let pendingRefreshPromise: Promise<void> | null = null
  * Has cooldown to prevent excessive API calls
  * Deduplicates concurrent calls to prevent race conditions
  */
-export function refreshArchivedIds(force = false): Promise<void> {
+function refreshArchivedIds(force = false): Promise<void> {
   // Return existing promise if refresh is already in progress
   if (pendingRefreshPromise) {
     return pendingRefreshPromise
