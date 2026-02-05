@@ -14,6 +14,13 @@ interface TextSegment {
   entities: MessageEntity[]
 }
 
+// Allow only safe URL protocols — blocks javascript:, data:, vbscript:, etc.
+const SAFE_URL_RE = /^(https?:\/\/|mailto:|tel:|#|\/)/i
+
+function sanitizeHref(url: string): string {
+  return SAFE_URL_RE.test(url) ? url : '#'
+}
+
 // Priority order for nesting (lower = outer wrapper)
 const PRIORITY: Record<string, number> = {
   blockquote: 0,
@@ -58,10 +65,10 @@ function EntityTag(props: { type: string; url?: string; text: string; children: 
     case 'link':
     case 'url':
       return (
-        <a 
-          href={url || text} 
-          target="_blank" 
-          rel="noopener noreferrer" 
+        <a
+          href={sanitizeHref(url || text)}
+          target="_blank"
+          rel="noopener noreferrer"
           class="text-accent hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
@@ -76,13 +83,13 @@ function EntityTag(props: { type: string; url?: string; text: string; children: 
       return <span class="text-accent">{children}</span>
     case 'email':
       return (
-        <a href={`mailto:${text}`} class="text-accent hover:underline" onClick={(e) => e.stopPropagation()}>
+        <a href={sanitizeHref(`mailto:${text}`)} class="text-accent hover:underline" onClick={(e) => e.stopPropagation()}>
           {children}
         </a>
       )
     case 'phone':
       return (
-        <a href={`tel:${text.replace(/\s/g, '')}`} class="text-accent hover:underline" onClick={(e) => e.stopPropagation()}>
+        <a href={sanitizeHref(`tel:${text.replace(/\s/g, '')}`)} class="text-accent hover:underline" onClick={(e) => e.stopPropagation()}>
           {children}
         </a>
       )
@@ -139,7 +146,7 @@ function SegmentRenderer(props: { segment: TextSegment }) {
   if (entities.length === 0) {
     if (isAutoUrl) {
       return (
-        <a href={autoHref} target="_blank" rel="noopener noreferrer" class="text-accent hover:underline" onClick={(e) => e.stopPropagation()}>
+        <a href={sanitizeHref(autoHref)} target="_blank" rel="noopener noreferrer" class="text-accent hover:underline" onClick={(e) => e.stopPropagation()}>
           {text}
         </a>
       )
@@ -165,7 +172,7 @@ function SegmentRenderer(props: { segment: TextSegment }) {
   // If auto-URL detected, wrap everything with link
   if (isAutoUrl) {
     return (
-      <a href={autoHref} target="_blank" rel="noopener noreferrer" class="text-accent hover:underline" onClick={(e) => e.stopPropagation()}>
+      <a href={sanitizeHref(autoHref)} target="_blank" rel="noopener noreferrer" class="text-accent hover:underline" onClick={(e) => e.stopPropagation()}>
         {content}
       </a>
     )

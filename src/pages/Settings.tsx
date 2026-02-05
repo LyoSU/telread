@@ -179,14 +179,13 @@ function Settings() {
             {/* Refresh channels */}
             <button
               onClick={async () => {
-                // Clear all caches and refetch
+                // Clear all caches and refetch — no page reload needed
                 clearPosts()
                 await queryClient.invalidateQueries({ queryKey: queryKeys.timeline.all })
                 await queryClient.invalidateQueries({ queryKey: queryKeys.channels.all })
                 await queryClient.invalidateQueries({ queryKey: queryKeys.folders.all })
-                // Force refetch
+                await queryClient.refetchQueries({ queryKey: queryKeys.channels.all })
                 await queryClient.refetchQueries({ queryKey: queryKeys.timeline.all })
-                window.location.reload()
               }}
               class="w-full flex items-center gap-3 p-3 rounded-xl bg-[var(--pill-bg)] hover:bg-[var(--pill-bg-hover)] transition-colors text-left"
             >

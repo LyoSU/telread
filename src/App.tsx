@@ -238,11 +238,10 @@ export function App() {
       <ErrorBoundary
         fallback={(err) => {
         console.error('[App] Error caught by boundary:', err)
-        // On cleanNode errors during navigation, just redirect to home
-        // Check for various manifestations of this SolidJS cleanup error
-        // SolidJS cleanNode errors during navigation - safe to ignore
+        // SolidJS cleanNode errors during navigation - safe to redirect home
+        // Check stack trace for cleanNode (reliable across SolidJS versions)
         const isCleanNodeError =
-          err?.message?.includes("reading '24'") ||
+          err?.message?.includes('cleanNode') ||
           err?.stack?.includes('cleanNode')
 
         if (isCleanNodeError) {
