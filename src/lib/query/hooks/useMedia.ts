@@ -2,6 +2,7 @@ import { createQuery } from '@tanstack/solid-query'
 import { downloadMedia, downloadProfilePhoto } from '@/lib/telegram'
 import type { MediaPriority } from '@/lib/telegram'
 import { isFloodWait } from '@/lib/telegram/errors'
+import { isMobile } from '@/config/constants'
 import { queryKeys } from '../keys'
 
 /**
@@ -49,7 +50,7 @@ export function useMedia(
     queryKey: queryKeys.media.download(channelId(), messageId(), size?.() ?? 'full'),
     queryFn: () => downloadMedia(channelId(), messageId(), size?.(), undefined, priority?.() ?? 'high'),
     staleTime: 1000 * 60 * 30, // 30 min - media rarely changes
-    gcTime: 1000 * 60 * 10, // 10 min in memory (blob URLs are session-only anyway)
+    gcTime: isMobile ? 1000 * 60 * 5 : 1000 * 60 * 10, // Mobile: 5min, Desktop: 10min
     retry: shouldRetryMedia,
     retryDelay: getRetryDelay,
     // Don't fetch for invalid IDs (client readiness checked in queryFn after cache check)
@@ -73,7 +74,7 @@ export function useProfilePhoto(
     queryKey: queryKeys.media.profile(peerId(), size),
     queryFn: () => downloadProfilePhoto(peerId(), size, priority?.() ?? 'high'),
     staleTime: Infinity, // Never stale - cache checked in queryFn
-    gcTime: 1000 * 60 * 60, // 1 hour in query cache
+    gcTime: isMobile ? 1000 * 60 * 15 : 1000 * 60 * 60, // Mobile: 15min, Desktop: 1hr
     retry: shouldRetryMedia,
     retryDelay: getRetryDelay,
     refetchOnMount: false, // Don't refetch - downloadProfilePhoto checks IndexedDB

@@ -10,19 +10,20 @@
 import { createStore, produce } from 'solid-js/store'
 import type { Message } from '@/lib/telegram'
 import { getTime } from '@/lib/utils'
+import { isMobile } from '@/config/constants'
 
 /**
  * Maximum posts to keep in memory
- * ~300 posts * ~2KB average = ~600KB
- * Enough for smooth scrolling without heavy RAM usage
+ * Desktop: ~300 posts * ~2KB = ~600KB
+ * Mobile: ~150 posts * ~2KB = ~300KB (less GC pressure)
  */
-const MAX_POSTS = 300
+const MAX_POSTS = isMobile ? 150 : 300
 
 /**
  * Maximum pending posts before auto-reveal
  * Prevents unbounded growth if user never clicks "new posts"
  */
-const MAX_PENDING = 100
+const MAX_PENDING = isMobile ? 50 : 100
 
 type PostKey = string
 

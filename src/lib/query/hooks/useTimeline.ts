@@ -1,5 +1,5 @@
 import { createQuery, createInfiniteQuery } from '@tanstack/solid-query'
-import { createEffect, on, createMemo, onCleanup } from 'solid-js'
+import { createEffect, on, createMemo, onCleanup, untrack } from 'solid-js'
 import {
   fetchMessages,
   fetchChannelsWithLastMessages,
@@ -694,52 +694,60 @@ export function useOptimizedTimeline() {
   )
 
   // Reactive timeline from centralized store
-  // Tracks both sortedKeys AND individual post changes (for edits, reactions)
+  // Only re-runs when sortedKeys order changes (post add/remove) or filter settings change
+  // byId content changes (views, reactions) are untracked — they don't affect grouping/filtering
   // FILTERING: Only show posts from channels in our store + folder filter
   const timeline = createMemo(() => {
-    const keys = postsState.sortedKeys
-    let posts = keys.map((key) => postsState.byId[key]).filter(Boolean) as Message[]
-
+    const keys = postsState.sortedKeys // TRACKED - triggers on order change
     const hideArchived = preferencesStore.preferences.hideArchived
     const folderId = folderStore.selectedFolderId
     const folderChannelIds = folderStore.channelIdsInFolder
 
-    // Filter out posts from archived channels when hideArchived=true
-    if (hideArchived) {
-      posts = posts.filter(post => !isChannelArchived(post.channelId))
-    }
+    return untrack(() => { // UNTRACKED - byId content changes won't trigger recomputation
+      let posts = keys.map((key) => postsState.byId[key]).filter(Boolean) as Message[]
 
-    // Filter by folder if one is selected
-    if (folderId !== null && folderChannelIds.length > 0) {
-      const allowedChannelIds = new Set(folderChannelIds)
-      posts = posts.filter(post => allowedChannelIds.has(post.channelId))
-    }
+      // Filter out posts from archived channels when hideArchived=true
+      if (hideArchived) {
+        posts = posts.filter(post => !isChannelArchived(post.channelId))
+      }
 
-    // Group posts by groupedId for albums
-    return groupPostsByMediaGroup(posts)
+      // Filter by folder if one is selected
+      if (folderId !== null && folderChannelIds.length > 0) {
+        const allowedChannelIds = new Set(folderChannelIds)
+        posts = posts.filter(post => allowedChannelIds.has(post.channelId))
+      }
+
+      // Group posts by groupedId for albums
+      return groupPostsByMediaGroup(posts)
+    })
   })
 
   // Pending count - grouped by media group for accurate count
   // FILTERING: Only count posts from channels in our store + folder filter
   const pendingCount = createMemo(() => {
-    const keys = postsState.pendingKeys
+    const keys = postsState.pendingKeys // TRACKED
     if (keys.length === 0) return 0
-    let posts = keys.map((key) => postsState.byId[key]).filter(Boolean) as Message[]
 
     const hideArchived = preferencesStore.preferences.hideArchived
+    const folderId = folderStore.selectedFolderId
+    const folderChannelIds = folderStore.channelIdsInFolder
 
-    // Filter out posts from archived channels when hideArchived=true
-    if (hideArchived) {
-      posts = posts.filter(post => !isChannelArchived(post.channelId))
-    }
+    return untrack(() => {
+      let posts = keys.map((key) => postsState.byId[key]).filter(Boolean) as Message[]
 
-    // Filter by folder if one is selected
-    if (folderStore.selectedFolderId !== null && folderStore.channelIdsInFolder.length > 0) {
-      const allowedChannelIds = new Set(folderStore.channelIdsInFolder)
-      posts = posts.filter(post => allowedChannelIds.has(post.channelId))
-    }
+      // Filter out posts from archived channels when hideArchived=true
+      if (hideArchived) {
+        posts = posts.filter(post => !isChannelArchived(post.channelId))
+      }
 
-    return groupPostsByMediaGroup(posts).length
+      // Filter by folder if one is selected
+      if (folderId !== null && folderChannelIds.length > 0) {
+        const allowedChannelIds = new Set(folderChannelIds)
+        posts = posts.filter(post => allowedChannelIds.has(post.channelId))
+      }
+
+      return groupPostsByMediaGroup(posts).length
+    })
   })
 
   // Filtered channels based on selected folder and hideArchived preference

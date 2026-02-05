@@ -5,6 +5,19 @@
  */
 
 // ============================================================================
+// Device Detection
+// ============================================================================
+
+/**
+ * Detect mobile device at module load time
+ * Used to adjust limits, timeouts, and preload distances for better mobile performance
+ */
+export const isMobile = typeof navigator !== 'undefined' && (
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+  ('maxTouchPoints' in navigator && navigator.maxTouchPoints > 0)
+)
+
+// ============================================================================
 // Timing Constants (in milliseconds)
 // ============================================================================
 
@@ -95,7 +108,7 @@ export const MAX_COMMENT_LENGTH = 4096
  * Note: We don't revoke URLs on eviction (components may still reference them)
  * so browser GC handles cleanup. IndexedDB provides persistence.
  */
-export const MEDIA_CACHE_MAX_SIZE = 100
+export const MEDIA_CACHE_MAX_SIZE = isMobile ? 50 : 100
 
 /**
  * Query cache stale time in milliseconds (30 minutes)

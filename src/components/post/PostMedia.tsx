@@ -1,6 +1,6 @@
 import { createSignal, Show, Match, Switch, For, onCleanup, createMemo, createEffect } from 'solid-js'
 import { Portal } from 'solid-js/web'
-import { DEFAULT_ASPECT_RATIO, MEDIA } from '@/config/constants'
+import { DEFAULT_ASPECT_RATIO, MEDIA, isMobile } from '@/config/constants'
 import type { MessageMedia } from '@/lib/telegram'
 import { useMedia } from '@/lib/query'
 import { mediaController } from '@/lib/media'
@@ -91,7 +91,7 @@ export function PostMedia(props: PostMediaProps) {
         }
       },
       {
-        rootMargin: '600px', // Preload earlier for smoother experience
+        rootMargin: isMobile ? '300px' : '600px',
         threshold: 0
       }
     )
@@ -138,25 +138,27 @@ export function PostMedia(props: PostMediaProps) {
                 height={props.media.height || MEDIA.DEFAULT_HEIGHT}
               />
             </Show>
-            {/* Top layer: full image - always rendered to prevent re-mount flickering */}
-            <img
-              src={mediaQuery.data || ''}
-              alt="Post media"
-              class={`w-full h-full object-cover cursor-pointer hover:scale-[1.02] transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-accent ${
-                mediaQuery.data ? 'opacity-100' : 'opacity-0'
-              }`}
-              loading="lazy"
-              decoding="async"
-              width={props.media.width || MEDIA.DEFAULT_WIDTH}
-              height={props.media.height || MEDIA.DEFAULT_HEIGHT}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (mediaQuery.data) setIsExpanded(true)
-              }}
-              onKeyDown={handleImageKeyDown}
-              tabIndex={mediaQuery.data ? 0 : -1}
-              role="button"
-            />
+            {/* Top layer: full image - only mount when URL is ready to avoid empty src decode */}
+            <Show when={mediaQuery.data}>
+              {(url) => (
+                <img
+                  src={url()}
+                  alt="Post media"
+                  class="w-full h-full object-cover cursor-pointer hover:scale-[1.02] transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-accent animate-fade-in"
+                  loading="lazy"
+                  decoding="async"
+                  width={props.media.width || MEDIA.DEFAULT_WIDTH}
+                  height={props.media.height || MEDIA.DEFAULT_HEIGHT}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsExpanded(true)
+                  }}
+                  onKeyDown={handleImageKeyDown}
+                  tabIndex={0}
+                  role="button"
+                />
+              )}
+            </Show>
           </div>
         </Match>
 

@@ -1,5 +1,5 @@
 import { getTelegramClient, isClientReady } from './client'
-import { MEDIA_CACHE_MAX_SIZE } from '@/config/constants'
+import { MEDIA_CACHE_MAX_SIZE, isMobile } from '@/config/constants'
 import { get, set, del, keys } from 'idb-keyval'
 import type { Photo, Video, Document, Sticker, Audio, Voice, WebPageMedia } from '@mtcute/web'
 import { isChannelInvalid, isFileReferenceExpired, isFloodWait } from './errors'
@@ -102,7 +102,7 @@ class MediaLRUCache {
 
   /**
    * Schedule delayed revocation of blob URLs
-   * Waits 30 seconds before revoking to allow components to finish rendering
+   * Mobile: 5s delay (free memory faster), Desktop: 30s delay
    */
   private scheduleRevocation(): void {
     if (this.revocationTimer) return
@@ -112,7 +112,7 @@ class MediaLRUCache {
       }
       this.pendingRevocations.clear()
       this.revocationTimer = null
-    }, 30000)
+    }, isMobile ? 5000 : 30000)
   }
 
   get(key: string): string | undefined {
@@ -313,7 +313,7 @@ function scheduleProfileRevocation(): void {
     }
     pendingProfileRevocations.clear()
     profileRevocationTimer = null
-  }, 30000) // 30s delay to let components finish rendering
+  }, isMobile ? 5000 : 30000)
 }
 
 function addToProfilePhotoCache(key: string, url: string): void {
@@ -400,14 +400,7 @@ async function cacheProfilePhoto(peerId: number, size: string, buffer: Uint8Arra
 // Download Queue Management
 // ============================================================================
 
-/**
- * Detect if running on mobile device
- * Used to adjust concurrent downloads for better performance
- */
-const isMobile = typeof navigator !== 'undefined' && (
-  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-  ('maxTouchPoints' in navigator && navigator.maxTouchPoints > 0)
-)
+// isMobile imported from @/config/constants
 
 // Increased limits for faster loading
 const MAX_MEDIA_DOWNLOADS = isMobile ? 6 : 10

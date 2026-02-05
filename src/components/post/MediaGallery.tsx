@@ -4,7 +4,7 @@ import { useMedia } from '@/lib/query'
 import { VideoModal, Lightbox, type LightboxItem } from '@/components/ui'
 import { Play } from 'lucide-solid'
 import type { MessageMedia } from '@/lib/telegram'
-import { MEDIA } from '@/config/constants'
+import { MEDIA, isMobile } from '@/config/constants'
 
 interface MediaItem {
   channelId: number
@@ -175,7 +175,7 @@ function GalleryItem(props: {
           setIsVisible(true)
         }
       },
-      { rootMargin: '600px', threshold: 0 }
+      { rootMargin: isMobile ? '300px' : '600px', threshold: 0 }
     )
     observer.observe(el)
   }
@@ -233,35 +233,35 @@ function GalleryItem(props: {
         />
       </Show>
       
-      {/* Top layer: full media - always rendered to prevent re-mount flickering */}
-      <Show
-        when={isAnimation()}
-        fallback={
-          <img
-            src={mediaQuery.data || ''}
-            alt={`Media ${mediaType()}`}
-            class={`w-full h-full object-cover hover:scale-[1.02] transition-all duration-300 ${
-              mediaQuery.data ? 'opacity-100' : 'opacity-0'
-            }`}
-            loading="lazy"
-            decoding="async"
-            width={props.item.media.width || MEDIA.DEFAULT_WIDTH}
-            height={props.item.media.height || MEDIA.DEFAULT_HEIGHT}
-          />
-        }
-      >
-        <video
-          src={mediaQuery.data || ''}
-          class={`w-full h-full object-cover transition-opacity duration-300 ${
-            mediaQuery.data ? 'opacity-100' : 'opacity-0'
-          }`}
-          autoplay
-          muted
-          loop
-          playsinline
-          preload="metadata"
-          poster={props.item.media.thumb}
-        />
+      {/* Top layer: full media - only mount when URL ready to avoid empty src decode */}
+      <Show when={mediaQuery.data}>
+        {(url) => (
+          <Show
+            when={isAnimation()}
+            fallback={
+              <img
+                src={url()}
+                alt={`Media ${mediaType()}`}
+                class="w-full h-full object-cover hover:scale-[1.02] transition-all duration-300 animate-fade-in"
+                loading="lazy"
+                decoding="async"
+                width={props.item.media.width || MEDIA.DEFAULT_WIDTH}
+                height={props.item.media.height || MEDIA.DEFAULT_HEIGHT}
+              />
+            }
+          >
+            <video
+              src={url()}
+              class="w-full h-full object-cover animate-fade-in"
+              autoplay
+              muted
+              loop
+              playsinline
+              preload="metadata"
+              poster={props.item.media.thumb}
+            />
+          </Show>
+        )}
       </Show>
 
       <Show when={props.item.media.type === 'video'}>

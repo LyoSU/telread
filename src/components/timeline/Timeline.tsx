@@ -38,7 +38,8 @@ function TimelineItemWrapper(props: {
       class="timeline-item"
       style={{
         'content-visibility': 'auto',
-        'contain-intrinsic-size': 'auto 400px',
+        'contain-intrinsic-size': 'auto 300px',
+        contain: 'layout style paint',
       }}
     >
       <Show
