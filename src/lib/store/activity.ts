@@ -14,24 +14,6 @@ import { TIMING } from '@/config/constants'
 const STORAGE_KEY = 'telread:lastActive'
 
 /**
- * Get time since last activity in milliseconds
- * Returns Infinity if no previous activity recorded
- */
-function getTimeSinceLastActive(): number {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (!stored) return Infinity
-    
-    const lastActive = parseInt(stored, 10)
-    if (isNaN(lastActive)) return Infinity
-    
-    return Date.now() - lastActive
-  } catch {
-    return Infinity
-  }
-}
-
-/**
  * Update last active timestamp to now
  * Call this periodically while app is active
  */
@@ -74,21 +56,3 @@ export function startActivityTracking(): () => void {
   }
 }
 
-/**
- * Get human-readable time since last active
- */
-export function getLastActiveDescription(): string {
-  const ms = getTimeSinceLastActive()
-  
-  if (ms === Infinity) return 'never'
-  
-  const minutes = Math.floor(ms / 60000)
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
-  
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}

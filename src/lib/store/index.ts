@@ -3,10 +3,7 @@ export { themeStore, type Theme } from './theme'
 export { preferencesStore, type Preferences } from './preferences'
 export { bookmarksStore, type Bookmark } from './bookmarks'
 export { updateStore } from './update'
-export {
-  startActivityTracking,
-  getLastActiveDescription,
-} from './activity'
+export { startActivityTracking } from './activity'
 export {
   upsertPost,
   upsertPosts,

@@ -20,7 +20,6 @@ import {
   addArchivedChannelId,
   removeArchivedChannelId,
 } from '@/lib/store'
-import { addPostsToCache, removePostsFromCache } from '@/lib/query/hooks'
 import type { Message as TgMessage, RawUpdateInfo, Chat, tl } from '@mtcute/web'
 
 
@@ -148,11 +147,10 @@ function processBatch(): void {
 
   if (mapped.length === 0) return
 
-  // Add posts to pending (Twitter-style) and cache - batched for efficiency
+  // Add posts to pending (Twitter-style) - batched for efficiency
   for (const post of mapped) {
     upsertPost(post) // Individual call for pendingKeys behavior
   }
-  addPostsToCache(mapped)
 
   // Also process any pending messages that were queued before store was ready
   if (pendingMessages.length > 0) {
@@ -248,7 +246,6 @@ function processPendingMessages(): void {
   for (const post of mapped) {
     upsertPost(post) // Individual call for pendingKeys behavior
   }
-  addPostsToCache(mapped)
 }
 
 /**
@@ -359,7 +356,6 @@ export function startUpdatesListener(): UpdatesCleanup {
 
       // Try to handle as channel post deletion
       removePosts(channelId, update.messageIds)
-      removePostsFromCache(channelId, update.messageIds)
 
       // Also try to handle as comment deletion (if subscribed)
       handleCommentDelete(channelId, update.messageIds)
