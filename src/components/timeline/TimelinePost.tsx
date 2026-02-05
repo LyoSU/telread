@@ -1,4 +1,4 @@
-import { Show, createMemo } from 'solid-js'
+import { Show } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
 import { ChannelAvatar, TimeAgo } from '@/components/ui'
 import { PostContent, PostMedia, PostActions } from '@/components/post'
@@ -25,16 +25,14 @@ interface TimelinePostProps {
 export function TimelinePost(props: TimelinePostProps) {
   const navigate = useNavigate()
 
-  // Generate URLs - prefer username for pretty URLs (memoized)
-  const channelUrl = createMemo(() =>
+  // Plain functions — no memo needed for simple string concatenation
+  const channelUrl = () =>
     props.channelUsername ? `/c/${props.channelUsername}` : `/channel/${props.channelId}`
-  )
 
-  const postUrl = createMemo(() =>
+  const postUrl = () =>
     props.channelUsername
       ? `/c/${props.channelUsername}/${props.post.id}`
       : `/post/${props.post.channelId}/${props.post.id}`
-  )
 
   const handlePostClick = () => {
     navigate(postUrl())
@@ -45,13 +43,12 @@ export function TimelinePost(props: TimelinePostProps) {
     navigate(channelUrl())
   }
 
-  // Check if text is long enough to be truncated
-  const isTruncated = createMemo(() => {
+  // Check if text is long enough to be truncated — plain function, no memo needed
+  const isTruncated = () => {
     if (!props.post.text) return false
-    // Check character count or line breaks
     return props.post.text.length > UI.TRUNCATE_THRESHOLD ||
            (props.post.text.match(/\n/g) || []).length > 3
-  })
+  }
 
   return (
     <article class="post cursor-pointer" style={props.style} onClick={handlePostClick}>

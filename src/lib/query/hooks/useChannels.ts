@@ -154,7 +154,7 @@ export function useResolveChannel(idOrUsername: () => string | number | undefine
     get error() { return query.error },
     get isSuccess() { return query.isSuccess },
     get isFetching() { return query.isFetching },
-    get channelId() { return channelId() },
+    channelId, // Keep as accessor function — consumers call channelId()
     refetch: query.refetch,
   }
 }
