@@ -93,7 +93,6 @@ export {
   clearMediaCache,
   getCachedMedia,
   removeFromMediaCache,
-  getMediaCacheStats,
   cleanupExpiredCache,
   type MediaPriority,
 } from './media'

@@ -3,7 +3,6 @@ import { type JSX, splitProps, createSignal, Show, mergeProps } from 'solid-js'
 interface GlassInputProps {
   value?: string
   onInput?: (value: string) => void
-  onChange?: (value: string) => void
   onFocus?: () => void
   onBlur?: () => void
   onKeyDown?: (e: KeyboardEvent) => void
@@ -34,7 +33,6 @@ export function GlassInput(props: GlassInputProps) {
   const [local] = splitProps(merged, [
     'value',
     'onInput',
-    'onChange',
     'onFocus',
     'onBlur',
     'onKeyDown',

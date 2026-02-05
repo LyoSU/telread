@@ -2,7 +2,7 @@ import { useParams, useNavigate } from '@solidjs/router'
 import { createMemo, createEffect, onCleanup, Show } from 'solid-js'
 import { Timeline } from '@/components/timeline'
 import { ChannelCard } from '@/components/channel'
-import { Skeleton } from '@/components/ui'
+import { Skeleton, ErrorState } from '@/components/ui'
 import { useResolveChannel, useChannelInfo } from '@/lib/query/hooks/useChannels'
 import { useMessages } from '@/lib/query/hooks/useTimeline'
 import { openChannel, closeChannel } from '@/lib/telegram/openChats'
@@ -55,48 +55,69 @@ function Channel() {
   })
 
   const handleBack = () => {
-    const referrer = document.referrer
-    const isSameOrigin = referrer && new URL(referrer).origin === window.location.origin
-
-    if (isSameOrigin) {
-      navigate(-1)
-    } else {
-      navigate('/')
+    try {
+      const referrer = document.referrer
+      if (referrer && new URL(referrer).origin === window.location.origin) {
+        navigate(-1)
+        return
+      }
+    } catch {
+      // Malformed referrer — fall through to home
     }
+    navigate('/')
   }
 
   return (
     <div class="min-h-full flex flex-col">
       {/* Back button */}
       <div class="px-4 pt-4">
-        <button onClick={handleBack} class="pill">
+        <button type="button" onClick={handleBack} class="pill">
           <ChevronLeft size={16} />
           Back
         </button>
       </div>
+
+      {/* Error state */}
+      <Show when={!channel() && resolvedChannel.isError}>
+        <ErrorState
+          variant="not-found"
+          title="Channel not found"
+          description="This channel may not exist or is unavailable."
+          action={{
+            label: 'Try Again',
+            onClick: () => resolvedChannel.refetch(),
+          }}
+          secondaryAction={{
+            label: 'Go Back',
+            onClick: handleBack,
+          }}
+        />
+      </Show>
 
       {/* Channel card */}
       <div class="px-4 py-4">
         <Show
           when={channel()}
           fallback={
-            <div class="relative overflow-hidden rounded-3xl">
-              {/* Banner */}
-              <div class="h-28 bg-[var(--bg-tertiary)]" />
-              {/* Content card */}
-              <div class="relative glass-card -mt-8 mx-3 mb-3 p-4">
-                {/* Avatar row */}
-                <div class="flex items-end gap-4 -mt-14 mb-4">
-                  <Skeleton class="w-20 h-20 rounded-full ring-4 ring-[var(--bg-primary)]" />
-                  <div class="flex-1" />
+            <Show when={!resolvedChannel.isError}>
+              <div class="relative overflow-hidden rounded-3xl">
+                {/* Banner */}
+                <div class="h-28 bg-[var(--bg-tertiary)]" />
+                {/* Content card */}
+                <div class="relative glass-card -mt-8 mx-3 mb-3 p-4">
+                  {/* Avatar row */}
+                  <div class="flex items-end gap-4 -mt-14 mb-4">
+                    <Skeleton class="w-20 h-20 rounded-full ring-4 ring-[var(--bg-primary)]" />
+                    <div class="flex-1" />
+                  </div>
+                  {/* Content */}
+                  <Skeleton class="h-6 w-40 mb-2" />
+                  <Skeleton class="h-4 w-24 mb-4" />
+                  <Skeleton class="h-4 w-full mb-1" />
+                  <Skeleton class="h-4 w-2/3" />
                 </div>
-                {/* Content */}
-                <Skeleton class="h-6 w-40 mb-2" />
-                <Skeleton class="h-4 w-24 mb-4" />
-                <Skeleton class="h-4 w-full mb-1" />
-                <Skeleton class="h-4 w-2/3" />
               </div>
-            </div>
+            </Show>
           }
         >
           {(ch) => (

@@ -107,16 +107,16 @@ function Post() {
   })
 
   const handleBack = () => {
-    // Check if we came from within the app (same origin)
-    const referrer = document.referrer
-    const isSameOrigin = referrer && new URL(referrer).origin === window.location.origin
-
-    if (isSameOrigin) {
-      navigate(-1)
-    } else {
-      // Direct link or external referrer - go to home
-      navigate('/')
+    try {
+      const referrer = document.referrer
+      if (referrer && new URL(referrer).origin === window.location.origin) {
+        navigate(-1)
+        return
+      }
+    } catch {
+      // Malformed referrer — fall through to home
     }
+    navigate('/')
   }
 
   const handleChannelClick = () => {

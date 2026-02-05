@@ -920,16 +920,6 @@ export function getCachedMedia(
   return mediaCache.get(cacheKey) ?? null
 }
 
-/**
- * Get current cache statistics
- */
-export function getMediaCacheStats(): { size: number; maxSize: number } {
-  return {
-    size: mediaCache.size,
-    maxSize: MEDIA_CACHE_MAX_SIZE,
-  }
-}
-
 function getMimeType(media: { type: string; mimeType?: string }): string {
   if (media.mimeType) {
     return media.mimeType

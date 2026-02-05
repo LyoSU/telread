@@ -8,7 +8,7 @@ function ModalHeader(props: { title: string; onClose: () => void; compact?: bool
   return (
     <div class={`flex items-center justify-between px-6 ${props.compact ? 'py-3' : 'py-5'} border-b border-[var(--glass-border)]`}>
       <h2 class="text-lg font-semibold text-primary">{props.title}</h2>
-      <button onClick={() => { haptic('light'); props.onClose() }} class="pill p-2.5">
+      <button type="button" onClick={() => { haptic('light'); props.onClose() }} class="pill p-2.5">
         <X size={16} />
       </button>
     </div>
