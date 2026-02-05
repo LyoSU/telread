@@ -12,6 +12,36 @@ let clientInstance: TelegramClient | null = null
 let clientVersion = 0
 
 /**
+ * Callbacks to run on client reset (logout/reconnect)
+ * Used by other modules to register cleanup without circular imports
+ */
+const resetCallbacks: Array<() => void> = []
+
+/**
+ * Register a callback to run when client is reset (logout/reconnect)
+ * Returns unsubscribe function
+ */
+export function onClientReset(callback: () => void): () => void {
+  resetCallbacks.push(callback)
+  return () => {
+    const idx = resetCallbacks.indexOf(callback)
+    if (idx >= 0) resetCallbacks.splice(idx, 1)
+  }
+}
+
+function runResetCallbacks(): void {
+  for (const cb of resetCallbacks) {
+    try {
+      cb()
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('[TelRead] Reset callback error:', error)
+      }
+    }
+  }
+}
+
+/**
  * Reactive signal for client readiness
  * Used by queries to wait for client to be ready
  */
@@ -255,6 +285,9 @@ export async function logout(): Promise<void> {
     clientVersion++
     setClientReadySignal(false)
 
+    // Run registered cleanup callbacks (e.g., batch state, timers)
+    runResetCallbacks()
+
     if (import.meta.env.DEV) {
       console.log('[TelRead] Logging out (version:', clientVersion, ')')
     }
@@ -279,6 +312,7 @@ export async function logout(): Promise<void> {
 export function resetClient(): void {
   clientVersion++
   setClientReadySignal(false)
+  runResetCallbacks()
   clientInstance = null
 
   if (import.meta.env.DEV) {

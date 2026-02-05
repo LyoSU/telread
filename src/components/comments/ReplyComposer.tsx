@@ -31,7 +31,7 @@ export function ReplyComposer(props: ReplyComposerProps) {
         maxHeight={120}
       />
 
-      <Show when={text().length > 0 || true}>
+      <Show when={text().length > 0}>
         <div class="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-[var(--glass-border)]">
           <button
             type="button"

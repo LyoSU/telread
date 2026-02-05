@@ -74,6 +74,11 @@ export function VideoModal(props: VideoModalProps) {
     document.removeEventListener('keydown', handleKeyDown)
     window.removeEventListener('popstate', handlePopState)
     document.body.style.overflow = ''
+    // If modal is being unmounted without going through back button,
+    // remove the history entry we pushed to prevent broken navigation
+    if (!closedByBack && history.state?.modal === 'video') {
+      history.back()
+    }
   })
 
   const opacity = () => Math.max(0, 1 - offsetY() / 300)

@@ -58,7 +58,24 @@ const deserialize = (str: string): unknown => {
 
 const idbPersister: Persister = {
   persistClient: async (client: PersistedClient) => {
-    await set(IDB_KEY, serialize(client))
+    try {
+      await set(IDB_KEY, serialize(client))
+    } catch (error: unknown) {
+      // Handle IndexedDB quota exceeded - clear and retry once
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        if (import.meta.env.DEV) {
+          console.warn('[QueryClient] IndexedDB quota exceeded, clearing old cache and retrying')
+        }
+        try {
+          await del(IDB_KEY)
+          await set(IDB_KEY, serialize(client))
+        } catch {
+          // Give up silently - app will work without persistence
+        }
+        return
+      }
+      throw error
+    }
   },
   restoreClient: async (): Promise<PersistedClient | undefined> => {
     const data = await get<string>(IDB_KEY)

@@ -237,10 +237,23 @@ function flushPersistentCache(): void {
 /**
  * Queue posts for persistent cache (debounced to avoid frequent IndexedDB writes)
  */
+/** Maximum pending posts before force-flushing to prevent unbounded memory growth */
+const MAX_PENDING_PERSIST = 500
+
 function queuePostsForPersistence(posts: Message[]): void {
   if (posts.length === 0) return
 
   pendingPersistPosts.push(...posts)
+
+  // Force flush if too many pending (prevents unbounded growth during catch-up)
+  if (pendingPersistPosts.length >= MAX_PENDING_PERSIST) {
+    if (persistTimer) {
+      clearTimeout(persistTimer)
+      persistTimer = null
+    }
+    flushPersistentCache()
+    return
+  }
 
   if (!persistTimer) {
     persistTimer = setTimeout(flushPersistentCache, PERSIST_DEBOUNCE_MS)

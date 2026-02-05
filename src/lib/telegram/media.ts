@@ -301,16 +301,38 @@ const PROFILE_CACHE_TTL = 1000 * 60 * 60 * 24 * 7 // 7 days
 const MAX_PROFILE_PHOTO_CACHE = 200
 const profilePhotoCache = new Map<string, string>()
 
+// URLs pending delayed revocation (gives components time to release references)
+const pendingProfileRevocations = new Set<string>()
+let profileRevocationTimer: number | null = null
+
+function scheduleProfileRevocation(): void {
+  if (profileRevocationTimer) return
+  profileRevocationTimer = window.setTimeout(() => {
+    for (const url of pendingProfileRevocations) {
+      URL.revokeObjectURL(url)
+    }
+    pendingProfileRevocations.clear()
+    profileRevocationTimer = null
+  }, 30000) // 30s delay to let components finish rendering
+}
+
 function addToProfilePhotoCache(key: string, url: string): void {
   // Soft eviction when cache is too large - remove oldest 20%
   if (profilePhotoCache.size >= MAX_PROFILE_PHOTO_CACHE) {
     const toRemove = Math.floor(MAX_PROFILE_PHOTO_CACHE * 0.2)
     const keys = Array.from(profilePhotoCache.keys()).slice(0, toRemove)
     for (const k of keys) {
-      // Don't revoke - components may still reference
+      const evictedUrl = profilePhotoCache.get(k)
+      if (evictedUrl) {
+        // Schedule delayed revocation instead of leaking
+        pendingProfileRevocations.add(evictedUrl)
+        scheduleProfileRevocation()
+      }
       profilePhotoCache.delete(k)
     }
   }
+  // If this URL was pending revocation, cancel it
+  pendingProfileRevocations.delete(url)
   profilePhotoCache.set(key, url)
 }
 
@@ -749,12 +771,16 @@ export async function downloadMedia(
 // Download Profile Photo
 // ============================================================================
 
+// In-flight profile photo downloads for deduplication
+const profilePhotoInFlight = new Map<string, Promise<string | null>>()
+
 /**
  * Download a channel/user profile photo
  *
  * Uses separate non-evicting memory cache to prevent blob URL revocation
  * while React Query still holds references. Also persists to IndexedDB.
- * 
+ * Deduplicates concurrent downloads for the same photo.
+ *
  * @param priority - Download priority (high for visible, normal for prefetch)
  */
 export async function downloadProfilePhoto(
@@ -770,6 +796,28 @@ export async function downloadProfilePhoto(
     return memCached
   }
 
+  // Deduplicate concurrent downloads for the same photo
+  const inFlight = profilePhotoInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  const downloadPromise = downloadProfilePhotoInner(peerId, size, cacheKey, priority)
+
+  profilePhotoInFlight.set(cacheKey, downloadPromise)
+  try {
+    return await downloadPromise
+  } finally {
+    profilePhotoInFlight.delete(cacheKey)
+  }
+}
+
+async function downloadProfilePhotoInner(
+  peerId: number,
+  size: 'small' | 'big',
+  cacheKey: string,
+  priority: Priority
+): Promise<string | null> {
   // Check persistent cache (IndexedDB)
   // Note: getCachedProfilePhoto already stores in memory cache if found
   const persistedUrl = await getCachedProfilePhoto(peerId, size)
@@ -912,13 +960,23 @@ export async function preloadThumbnails(
  */
 export function clearMediaCache(): void {
   mediaCache.clear()
-  
+
+  // Clear pending profile photo revocations
+  if (profileRevocationTimer) {
+    window.clearTimeout(profileRevocationTimer)
+    profileRevocationTimer = null
+  }
+  for (const url of pendingProfileRevocations) {
+    URL.revokeObjectURL(url)
+  }
+  pendingProfileRevocations.clear()
+
   // Revoke profile photo blob URLs and clear cache
   for (const url of profilePhotoCache.values()) {
     URL.revokeObjectURL(url)
   }
   profilePhotoCache.clear()
-  
+
   debugLog('Media cache cleared')
 }
 

@@ -9,7 +9,6 @@ import {
   sendComment,
   downloadProfilePhoto,
   subscribeToComments,
-  onCommentUpdate,
   CommentError,
   type Comment,
   type CommentThread,
@@ -130,21 +129,6 @@ export function useComments(
       }
     )
   )
-
-  // Handle incoming comment updates
-  createEffect(() => {
-    const cId = channelId()
-    const mId = messageId()
-
-    const unsubscribe = onCommentUpdate((sub, update) => {
-      // Only process updates for this specific thread
-      if (sub.channelId !== cId || sub.messageId !== mId) return
-
-      applyCommentUpdate(queryClient, cId, mId, update)
-    })
-
-    onCleanup(unsubscribe)
-  })
 
   return query
 }

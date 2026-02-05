@@ -8,6 +8,8 @@ import type { Channel } from '@/lib/telegram'
 import type { Message } from '@/lib/telegram'
 import type { TimelineItem } from '@/lib/utils'
 
+const EMPTY_ITEMS: TimelineItem[] = []
+
 interface TimelineProps {
   items: TimelineItem[]
   channels: Channel[]
@@ -144,7 +146,7 @@ export function Timeline(props: TimelineProps) {
   const getChannel = (channelId: number) => channelMap().get(channelId)
 
   // All items to render
-  const allItems = createMemo(() => props.items ?? [])
+  const allItems = createMemo(() => props.items ?? EMPTY_ITEMS)
 
   // Scroll position storage keys
   const getScrollKey = () => (props.scrollKey ? `timeline-scroll:${props.scrollKey}` : null)

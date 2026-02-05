@@ -1,4 +1,4 @@
-import { getTelegramClient, getClientVersion } from './client'
+import { getTelegramClient, getClientVersion, onClientReset } from './client'
 import { mapMessage, type MessageReaction, type Message } from './messages'
 import { mapChatToChannel } from './channels'
 import { clearFoldersCache } from './folders'
@@ -559,6 +559,22 @@ export function stopUpdatesListener(): void {
     activeCleanup = null
   }
 }
+
+/**
+ * Clean up batch timer and queues — prevents stale timer firing after logout
+ */
+function cleanupBatchState(): void {
+  if (batchTimer) {
+    clearTimeout(batchTimer)
+    batchTimer = null
+  }
+  pendingBatch.messages = []
+  pendingMessages.length = 0
+  isPaused = false
+}
+
+// Register cleanup with client so it runs on logout/reset (avoids circular import)
+onClientReset(cleanupBatchState)
 
 export function isUpdatesListenerActive(): boolean {
   return isListenerActive

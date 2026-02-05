@@ -12,11 +12,16 @@ interface ChannelCardProps {
   class?: string
 }
 
+// Cache extracted colors by URL to avoid redundant canvas operations
+const colorCache = new Map<string, { h: number; s: number; l: number } | null>()
+
 /**
  * Extract dominant color from image using canvas sampling
- * Returns HSL color for easy manipulation
+ * Returns HSL color for easy manipulation. Results are cached by URL.
  */
 function extractDominantColor(imageUrl: string): Promise<{ h: number; s: number; l: number } | null> {
+  const cached = colorCache.get(imageUrl)
+  if (cached !== undefined) return Promise.resolve(cached)
   return new Promise((resolve) => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
@@ -83,12 +88,15 @@ function extractDominantColor(imageUrl: string): Promise<{ h: number; s: number;
           }
         }
 
-        resolve({ h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) })
+        const color = { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) }
+        colorCache.set(imageUrl, color)
+        resolve(color)
       } catch {
+        colorCache.set(imageUrl, null)
         resolve(null)
       }
     }
-    img.onerror = () => resolve(null)
+    img.onerror = () => { colorCache.set(imageUrl, null); resolve(null) }
     img.src = imageUrl
   })
 }

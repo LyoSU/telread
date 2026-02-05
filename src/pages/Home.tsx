@@ -127,8 +127,9 @@ function Home() {
 
         // Cancel any in-flight sync task
         folderSyncAbortController?.abort()
-        folderSyncAbortController = new AbortController()
-        const signal = folderSyncAbortController.signal
+        const controller = new AbortController()
+        folderSyncAbortController = controller
+        const signal = controller.signal
 
         if (folderId === null) {
             // Clear folder
