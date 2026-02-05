@@ -285,16 +285,7 @@ function convertBareIdsToMarked(includePeers: number[], folderTitle: string): nu
         console.log(`[Folders] Processing ${bareIds.length} bare IDs from folder ${folderTitle}`)
     }
 
-    const channelIds = bareIds.map(bareId => {
-        const markedId = Number(`-100${bareId}`)
-        if (isNaN(markedId)) {
-            if (import.meta.env.DEV) {
-                console.warn(`[Folders] Failed to convert bare ID ${bareId} to marked ID`)
-            }
-            return 0
-        }
-        return markedId
-    }).filter(id => id !== 0)
+    const channelIds = bareIds.map(bareId => -1000000000000 - bareId)
 
     if (import.meta.env.DEV) {
         console.log(`[Folders] Folder "${folderTitle}": mapped to ${channelIds.length} channel IDs`)
@@ -399,10 +390,12 @@ function extractPeerIds(peers: tl.TypeInputPeer[]): number[] {
  * Count how many channels from the given list are in this filter
  */
 function countChannelsInFilter(filter: DialogFilter, channelIds: number[]): number {
-    // If filter explicitly includes peers, check intersection using Set for O(1) lookup
+    // If filter explicitly includes peers, check intersection
+    // includePeers are bare IDs (positive), channelIds are marked (-100XXXXX)
+    // Convert bare → marked for comparison
     if (filter.includePeers.length > 0) {
-        const includedSet = new Set(filter.includePeers)
-        return channelIds.filter(id => includedSet.has(id)).length
+        const markedSet = new Set(filter.includePeers.map(id => -1000000000000 - id))
+        return channelIds.filter(id => markedSet.has(id)).length
     }
 
     // If filter uses broadcasts flag, count all channels

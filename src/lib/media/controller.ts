@@ -239,6 +239,13 @@ class MediaController {
   getCurrentId(): string | null {
     return this.current?.id ?? null
   }
+
+  /**
+   * Get media type for a registered instance
+   */
+  getType(id: string): MediaType | null {
+    return this.instances.get(id)?.type ?? null
+  }
 }
 
 // Singleton instance
@@ -246,10 +253,16 @@ export const mediaController = new MediaController()
 
 // Pause all media when navigating (SPA navigation)
 if (typeof window !== 'undefined') {
-  // Pause on visibility change (tab switch)
+  // Pause video on tab switch — let audio/voice continue for background listening
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      mediaController.pauseAll()
+      const current = mediaController.getCurrentId()
+      if (current) {
+        const type = mediaController.getType(current)
+        if (type === 'video' || type === 'video_note') {
+          mediaController.pause(current)
+        }
+      }
     }
   })
 }

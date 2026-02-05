@@ -12,10 +12,8 @@
  * Detect mobile device at module load time
  * Used to adjust limits, timeouts, and preload distances for better mobile performance
  */
-export const isMobile = typeof navigator !== 'undefined' && (
-  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-  ('maxTouchPoints' in navigator && navigator.maxTouchPoints > 0)
-)
+export const isMobile = typeof navigator !== 'undefined' &&
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 
 // ============================================================================
 // Timing Constants (in milliseconds)
@@ -110,16 +108,6 @@ export const MAX_COMMENT_LENGTH = 4096
  */
 export const MEDIA_CACHE_MAX_SIZE = isMobile ? 50 : 100
 
-/**
- * Query cache stale time in milliseconds (30 minutes)
- */
-export const QUERY_STALE_TIME = 1000 * 60 * 30
-
-/**
- * Query cache garbage collection time in milliseconds (24 hours)
- */
-export const QUERY_GC_TIME = 1000 * 60 * 60 * 24
-
 // ============================================================================
 // Query Timing Constants
 // ============================================================================
@@ -148,11 +136,6 @@ export const QUERY = {
  * Scroll threshold for triggering infinite scroll (pixels from bottom)
  */
 export const INFINITE_SCROLL_THRESHOLD = 500
-
-/**
- * Throttle delay for scroll events in milliseconds
- */
-export const SCROLL_THROTTLE_MS = 300
 
 /**
  * Default aspect ratio for media without dimensions

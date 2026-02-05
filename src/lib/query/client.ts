@@ -72,7 +72,7 @@ const idbPersister: Persister = {
         }
         return
       }
-      throw error
+      // Swallow non-quota errors — app works without persistence
     }
   },
   restoreClient: async (): Promise<PersistedClient | undefined> => {
@@ -88,15 +88,20 @@ const idbPersister: Persister = {
 const CACHE_VERSION = 'v12' // v12: removed redundant synced posts cache
 const CACHE_VERSION_KEY = 'telread-cache-version'
 
-const storedVersion = localStorage.getItem(CACHE_VERSION_KEY)
-if (storedVersion !== CACHE_VERSION) {
-  // Clear IndexedDB cache
-  del(IDB_KEY).then(() => {
-    if (import.meta.env.DEV) {
-      console.log('[QueryClient] Cache cleared due to version change:', storedVersion, '->', CACHE_VERSION)
-    }
-  })
-  localStorage.setItem(CACHE_VERSION_KEY, CACHE_VERSION)
+try {
+  const storedVersion = localStorage.getItem(CACHE_VERSION_KEY)
+  if (storedVersion !== CACHE_VERSION) {
+    // Clear IndexedDB cache
+    del(IDB_KEY).then(() => {
+      if (import.meta.env.DEV) {
+        console.log('[QueryClient] Cache cleared due to version change:', storedVersion, '->', CACHE_VERSION)
+      }
+    })
+    localStorage.setItem(CACHE_VERSION_KEY, CACHE_VERSION)
+  }
+} catch {
+  // localStorage unavailable (incognito, iframe sandbox, quota exceeded)
+  // App works without cache versioning — just skip
 }
 
 // Enable persistence - cache survives page reloads

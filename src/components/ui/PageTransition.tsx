@@ -1,4 +1,4 @@
-import { type ParentProps, createEffect, createSignal, on } from 'solid-js'
+import { type ParentProps, createEffect, createSignal, on, onCleanup } from 'solid-js'
 import { useLocation } from '@solidjs/router'
 import { TIMING } from '@/config/constants'
 
@@ -12,6 +12,7 @@ export function PageTransition(props: ParentProps) {
   const location = useLocation()
   const [isVisible, setIsVisible] = createSignal(true)
   const [currentPath, setCurrentPath] = createSignal(location.pathname)
+  let transitionTimer: ReturnType<typeof setTimeout> | undefined
 
   // Watch for route changes
   createEffect(
@@ -19,11 +20,14 @@ export function PageTransition(props: ParentProps) {
       () => location.pathname,
       (newPath) => {
         if (newPath !== currentPath()) {
+          // Cancel any in-flight transition from a previous rapid route change
+          clearTimeout(transitionTimer)
+
           // Start fade out
           setIsVisible(false)
 
           // After fade out, update path and fade in
-          setTimeout(() => {
+          transitionTimer = setTimeout(() => {
             setCurrentPath(newPath)
             setIsVisible(true)
           }, TIMING.PAGE_TRANSITION_DELAY) // Match CSS transition duration
@@ -32,6 +36,8 @@ export function PageTransition(props: ParentProps) {
       { defer: true }
     )
   )
+
+  onCleanup(() => clearTimeout(transitionTimer))
 
   return (
     <div

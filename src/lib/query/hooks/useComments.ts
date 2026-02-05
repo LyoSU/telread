@@ -12,7 +12,6 @@ import {
   CommentError,
   type Comment,
   type CommentThread,
-  type CommentUpdate,
   type CommentSubscription,
 } from '@/lib/telegram'
 import { isFloodWait } from '@/lib/telegram/errors'
@@ -131,80 +130,6 @@ export function useComments(
   )
 
   return query
-}
-
-/**
- * Apply a comment update to the query cache
- */
-function applyCommentUpdate(
-  queryClient: ReturnType<typeof useQueryClient>,
-  channelId: number,
-  messageId: number,
-  update: CommentUpdate
-): void {
-  const queryKey = queryKeys.comments.thread(channelId, messageId)
-
-  switch (update.type) {
-    case 'new': {
-      queryClient.setQueryData<CommentThread>(queryKey, (old) => {
-        if (!old) return old
-
-        // Check if comment already exists (dedup)
-        const exists = findCommentById(old.comments, update.comment.id)
-        if (exists) return old
-
-        // Resolve replyToAuthor if this is a reply
-        const comment = { ...update.comment }
-        if (comment.replyToId) {
-          const parent = findCommentById(old.comments, comment.replyToId)
-          if (parent) {
-            comment.replyToAuthor = { name: parent.author.name }
-          }
-        }
-
-        // Add as reply or root comment
-        if (comment.replyToId) {
-          return {
-            ...old,
-            totalCount: old.totalCount + 1,
-            comments: addReplyToTree(old.comments, comment.replyToId, comment),
-          }
-        }
-
-        // Add to beginning of root comments (newest first)
-        return {
-          ...old,
-          totalCount: old.totalCount + 1,
-          comments: [comment, ...old.comments],
-        }
-      })
-      break
-    }
-
-    case 'edit': {
-      queryClient.setQueryData<CommentThread>(queryKey, (old) => {
-        if (!old) return old
-        return {
-          ...old,
-          comments: updateCommentInTree(old.comments, update.comment),
-        }
-      })
-      break
-    }
-
-    case 'delete': {
-      queryClient.setQueryData<CommentThread>(queryKey, (old) => {
-        if (!old) return old
-        const deleted = update.commentIds.length
-        return {
-          ...old,
-          totalCount: Math.max(0, old.totalCount - deleted),
-          comments: removeCommentsFromTree(old.comments, update.commentIds),
-        }
-      })
-      break
-    }
-  }
 }
 
 /**

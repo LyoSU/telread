@@ -683,8 +683,10 @@ export async function downloadMedia(
         throw error
       }
       debugWarn(`Error downloading media: channel=${channelId}, msg=${messageId}`, error)
+      // Throw transient errors so TanStack Query retries instead of caching null
+      throw error
     }
-    return null
+    return null // Only reached if signal was aborted
   } finally {
     mediaQueue.release()
   }

@@ -1,5 +1,6 @@
 import { createSignal, Show, onMount, onCleanup } from 'solid-js'
 import { X } from 'lucide-solid'
+import { lockScroll, unlockScroll } from '@/lib/utils'
 
 interface VideoModalProps {
   url: string | null | undefined
@@ -65,7 +66,7 @@ export function VideoModal(props: VideoModalProps) {
 
   onMount(() => {
     document.addEventListener('keydown', handleKeyDown)
-    document.body.style.overflow = 'hidden'
+    lockScroll()
     history.pushState({ modal: 'video' }, '')
     window.addEventListener('popstate', handlePopState)
   })
@@ -73,7 +74,7 @@ export function VideoModal(props: VideoModalProps) {
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeyDown)
     window.removeEventListener('popstate', handlePopState)
-    document.body.style.overflow = ''
+    unlockScroll()
     // If modal is being unmounted without going through back button,
     // remove the history entry we pushed to prevent broken navigation
     if (!closedByBack && history.state?.modal === 'video') {

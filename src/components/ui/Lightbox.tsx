@@ -91,15 +91,18 @@ export function Lightbox(props: LightboxProps) {
     }
   }
 
+  let rafId: number | undefined
+
   createEffect(() => {
     if (props.open) {
-      requestAnimationFrame(() => openLightbox())
+      rafId = requestAnimationFrame(() => openLightbox())
     } else {
       closeLightbox()
     }
   })
 
   onCleanup(() => {
+    if (rafId !== undefined) cancelAnimationFrame(rafId)
     closeLightbox()
   })
 

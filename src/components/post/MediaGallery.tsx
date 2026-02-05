@@ -63,27 +63,15 @@ export function MediaGallery(props: MediaGalleryProps) {
     () => expandedIndex() !== null && isExpandedVideo()
   )
 
-  // Load full resolution for all photos in lightbox
-  const photoMediaQueries = photoItems().map(({ item }) => 
-    useMedia(
-      () => item.channelId,
-      () => item.messageId,
-      () => undefined,
-      lightboxOpen
-    )
-  )
-
-  // Build lightbox items from loaded photos
+  // Build lightbox items from photos — full-res queries are managed per GalleryItem
+  // Here we just use thumbs; the Lightbox component will show what's available
   const lightboxItems = createMemo((): LightboxItem[] => {
-    return photoItems().map(({ item }, idx) => {
-      const query = photoMediaQueries[idx]
-      return {
-        src: query?.data || item.media.thumb || '',
-        width: item.media.width || 1200,
-        height: item.media.height || 800,
-        thumb: item.media.thumb,
-      }
-    })
+    return photoItems().map(({ item }) => ({
+      src: item.media.thumb || '',
+      width: item.media.width || 1200,
+      height: item.media.height || 800,
+      thumb: item.media.thumb,
+    }))
   })
 
   const handleItemClick = (index: number) => {

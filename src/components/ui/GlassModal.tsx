@@ -2,7 +2,7 @@ import { type ParentProps, Show, createEffect, onCleanup, createSignal } from 's
 import { Portal } from 'solid-js/web'
 import { Motion, Presence } from 'solid-motionone'
 import { X } from 'lucide-solid'
-import { haptic } from '@/lib/utils'
+import { haptic, lockScroll, unlockScroll } from '@/lib/utils'
 
 function ModalHeader(props: { title: string; onClose: () => void; compact?: boolean }) {
   return (
@@ -62,11 +62,11 @@ export function GlassModal(props: GlassModalProps) {
     }
 
     document.addEventListener('keydown', handleEscape)
-    document.body.style.overflow = 'hidden'
+    lockScroll()
 
     onCleanup(() => {
       document.removeEventListener('keydown', handleEscape)
-      document.body.style.overflow = ''
+      unlockScroll()
     })
   })
 

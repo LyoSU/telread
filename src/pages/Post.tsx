@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from '@solidjs/router'
-import { Show, createMemo, createEffect, onCleanup } from 'solid-js'
+import { Show, createMemo, createEffect, onCleanup, untrack } from 'solid-js'
 import { Motion } from 'solid-motionone'
 import { ChannelAvatar, PostSkeleton, ErrorState } from '@/components/ui'
 import { PostContent, PostMedia, PostActions, MediaGallery } from '@/components/post'
@@ -72,19 +72,23 @@ function Post() {
   })
 
   // Find all posts in the same media group
+  // Only re-runs when the current post's groupedId changes (not on every store mutation)
   const groupedPosts = createMemo(() => {
     const post = postQuery.data
     if (!post?.groupedId) return null
 
-    // Find all posts with the same groupedId from the store
     const groupIdStr = post.groupedId.toString()
-    const allPosts = Object.values(postsState.byId).filter(
-      (p): p is Message => p?.groupedId?.toString() === groupIdStr
+
+    // untrack: avoid subscribing to every post in the store —
+    // this is a one-shot lookup triggered only by groupedId change
+    const allPosts = untrack(() =>
+      Object.values(postsState.byId).filter(
+        (p): p is Message => p?.groupedId?.toString() === groupIdStr
+      )
     )
 
     if (allPosts.length <= 1) return null
 
-    // Sort by message ID
     return allPosts.sort((a, b) => a.id - b.id)
   })
 

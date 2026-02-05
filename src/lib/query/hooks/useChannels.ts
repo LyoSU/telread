@@ -147,5 +147,14 @@ export function useResolveChannel(idOrUsername: () => string | number | undefine
 
   const channelId = createMemo(() => query.data?.id ?? 0)
 
-  return { ...query, channelId }
+  return {
+    get data() { return query.data },
+    get isLoading() { return query.isLoading },
+    get isError() { return query.isError },
+    get error() { return query.error },
+    get isSuccess() { return query.isSuccess },
+    get isFetching() { return query.isFetching },
+    get channelId() { return channelId() },
+    refetch: query.refetch,
+  }
 }

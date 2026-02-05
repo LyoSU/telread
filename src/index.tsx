@@ -5,22 +5,15 @@ import '@/styles/index.css'
 import App from './App'
 import { cacheReadyPromise } from '@/lib/query/client'
 import { updateStore } from '@/lib/store'
-import { fetchArchivedChannelIds } from '@/lib/telegram/channels'
 import { TIMING } from '@/config/constants'
 
-// Safety net for SolidJS cleanNode errors during navigation
-// These shouldn't occur with proper cleanup, but suppress them just in case
+// Safety net for SolidJS internal cleanNode errors during navigation
+// Only suppress the specific SolidJS cleanup TypeError, log everything else
 window.addEventListener('unhandledrejection', (event) => {
-  if (event.reason?.message?.includes('cleanNode') ||
-      event.reason?.stack?.includes('cleanNode')) {
+  const msg = event.reason?.message
+  if (typeof msg === 'string' && msg.includes('cleanNode')) {
     event.preventDefault()
-  }
-})
-
-window.addEventListener('error', (event) => {
-  if (event.message?.includes("reading '24'") ||
-      event.error?.stack?.includes('cleanNode')) {
-    event.preventDefault()
+    if (import.meta.env.DEV) console.debug('[Suppressed] SolidJS cleanNode rejection:', msg)
   }
 })
 
@@ -30,9 +23,13 @@ if (!root) {
   throw new Error('Root element not found')
 }
 
-// Wait for cache to restore, then render
+// Wait for cache to restore (with timeout), then render
 // This ensures cached posts show immediately instead of skeleton
-cacheReadyPromise.then(() => {
+// Timeout prevents infinite hang if IndexedDB is corrupted/locked
+Promise.race([
+  cacheReadyPromise,
+  new Promise<void>(resolve => setTimeout(resolve, 3000)),
+]).then(() => {
   render(() => <App />, root)
 
   // Remove splash after render
@@ -68,8 +65,6 @@ const updateSW = registerSW({
 declare global {
   interface Window {
     __swUpdate?: (reloadPage?: boolean) => Promise<void>
-    __fetchArchivedIds?: typeof fetchArchivedChannelIds
   }
 }
 window.__swUpdate = updateSW
-window.__fetchArchivedIds = fetchArchivedChannelIds

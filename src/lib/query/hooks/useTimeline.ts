@@ -27,6 +27,7 @@ import {
   startActivityTracking,
   setArchivedChannelIds,
   isChannelArchived,
+  getArchivedChannelIds,
 } from '@/lib/store'
 import { getTime, groupPostsByMediaGroup, type TimelineItem } from '@/lib/utils'
 import { queryKeys } from '../keys'
@@ -64,12 +65,8 @@ function refreshArchivedIds(force = false): Promise<void> {
 
   pendingRefreshPromise = fetchArchivedChannelIds()
     .then((archivedIds) => {
-      // Only update if we got results (don't clear cache on network failure)
-      if (archivedIds.size > 0) {
-        setArchivedChannelIds(archivedIds)
-      } else if (import.meta.env.DEV) {
-        console.log('[Timeline] No archived channels found, keeping existing cache')
-      }
+      // Always apply result — empty Set means user un-archived everything
+      setArchivedChannelIds(archivedIds)
     })
     .catch((error: unknown) => {
       if (import.meta.env.DEV) {
@@ -183,11 +180,10 @@ async function fetchInitialTimeline(): Promise<TimelineData> {
  */
 async function fetchTimelineHistory(
   channelIds: number[],
-  maxId: number,
+  channelOffsets: Map<number, number>,
   limit: number = 20
 ): Promise<Message[]> {
   // Limit parallel requests to avoid FLOOD_WAIT
-  // User-triggered so some parallelism is okay, but keep it conservative
   const channelsToFetch = channelIds.slice(0, 2)
   const messagesPerChannel = Math.ceil(limit / channelsToFetch.length)
 
@@ -196,7 +192,9 @@ async function fetchTimelineHistory(
   // Fetch sequentially with small delay to be safe
   for (const channelId of channelsToFetch) {
     try {
-      const messages = await fetchMessages(channelId, { limit: messagesPerChannel, maxId })
+      // Use per-channel offset — message IDs are per-channel, not global
+      const offsetId = channelOffsets.get(channelId) ?? 0
+      const messages = await fetchMessages(channelId, { limit: messagesPerChannel, maxId: offsetId })
       allMessages.push(...messages)
     } catch {
       // Skip failed channels
@@ -249,13 +247,21 @@ export function useOptimizedTimeline() {
       }
 
       if (ids.length === 0) return []
+      // Build per-channel offsets from the pageParam map
       return fetchTimelineHistory(ids, pageParam, 20)
     },
-    initialPageParam: 0 as number,
+    initialPageParam: new Map<number, number>(),
     getNextPageParam: (lastPage) => {
       if (lastPage.length === 0) return undefined
-      const oldest = lastPage.reduce((min, msg) => (msg.id < min.id ? msg : min), lastPage[0])
-      return oldest.id
+      // Build per-channel offset map: each channel's oldest message ID
+      const offsets = new Map<number, number>()
+      for (const msg of lastPage) {
+        const existing = offsets.get(msg.channelId)
+        if (!existing || msg.id < existing) {
+          offsets.set(msg.channelId, msg.id)
+        }
+      }
+      return offsets
     },
     // Enable if we have channels to fetch from
     enabled: !!initialQuery.data?.channels || (folderStore.selectedFolderId !== null && folderStore.channelIdsInFolder.length > 0),
@@ -354,13 +360,20 @@ export function useOptimizedTimeline() {
   onCleanup(() => document.removeEventListener('visibilitychange', handleVisibility))
 
   // Populate posts from history pages (from cache or after scroll fetch)
-  // Track processed page count to avoid re-processing
+  // Track processed page count to avoid re-processing — reset on folder switch
   let lastProcessedPageCount = 0
+  let lastProcessedFolderId: number | null = null
   createEffect(
     on(
       () => historyQuery.data?.pages,
       (pages) => {
         if (!pages || pages.length === 0) return
+        // Reset counter when folder changes (query key changed, pages reset)
+        const currentFolderId = folderStore.selectedFolderId
+        if (currentFolderId !== lastProcessedFolderId) {
+          lastProcessedFolderId = currentFolderId
+          lastProcessedPageCount = 0
+        }
         // Only process new pages
         if (pages.length <= lastProcessedPageCount) return
 
@@ -401,13 +414,15 @@ export function useOptimizedTimeline() {
     const hideArchived = preferencesStore.preferences.hideArchived
     const folderId = folderStore.selectedFolderId
     const folderChannelIds = folderStore.channelIdsInFolder
+    // TRACKED — reading the Set reference ensures memo re-runs when archived IDs change
+    const archivedIds = hideArchived ? getArchivedChannelIds() : null
 
     return untrack(() => { // UNTRACKED - byId content changes won't trigger recomputation
       let posts = keys.map((key) => postsState.byId[key]).filter(Boolean) as Message[]
 
       // Filter out posts from archived channels when hideArchived=true
-      if (hideArchived) {
-        posts = posts.filter(post => !isChannelArchived(post.channelId))
+      if (archivedIds) {
+        posts = posts.filter(post => !archivedIds.has(post.channelId))
       }
 
       // Filter by folder if one is selected
@@ -465,13 +480,14 @@ export function useOptimizedTimeline() {
     const hideArchived = preferencesStore.preferences.hideArchived
     const folderId = folderStore.selectedFolderId
     const folderChannelIds = folderStore.channelIdsInFolder
+    const archivedIds = hideArchived ? getArchivedChannelIds() : null
 
     return untrack(() => {
       let posts = keys.map((key) => postsState.byId[key]).filter(Boolean) as Message[]
 
       // Filter out posts from archived channels when hideArchived=true
-      if (hideArchived) {
-        posts = posts.filter(post => !isChannelArchived(post.channelId))
+      if (archivedIds) {
+        posts = posts.filter(post => !archivedIds.has(post.channelId))
       }
 
       // Filter by folder if one is selected
