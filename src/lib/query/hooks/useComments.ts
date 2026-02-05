@@ -132,60 +132,6 @@ export function useComments(
   return query
 }
 
-/**
- * Find a comment by ID in the tree (recursive)
- */
-function findCommentById(comments: Comment[], id: number): Comment | undefined {
-  for (const comment of comments) {
-    if (comment.id === id) return comment
-    if (comment.replies?.length) {
-      const found = findCommentById(comment.replies, id)
-      if (found) return found
-    }
-  }
-  return undefined
-}
-
-/**
- * Update a comment in the tree (recursive clone)
- */
-function updateCommentInTree(comments: Comment[], updated: Comment): Comment[] {
-  return comments.map((comment) => {
-    if (comment.id === updated.id) {
-      // Preserve replies and replyToAuthor from existing comment
-      return {
-        ...updated,
-        replies: comment.replies,
-        replyToAuthor: comment.replyToAuthor,
-      }
-    }
-    if (comment.replies?.length) {
-      return {
-        ...comment,
-        replies: updateCommentInTree(comment.replies, updated),
-      }
-    }
-    return comment
-  })
-}
-
-/**
- * Remove comments from tree by IDs (recursive clone)
- */
-function removeCommentsFromTree(comments: Comment[], ids: number[]): Comment[] {
-  const idSet = new Set(ids)
-  return comments
-    .filter((comment) => !idSet.has(comment.id))
-    .map((comment) => {
-      if (comment.replies?.length) {
-        return {
-          ...comment,
-          replies: removeCommentsFromTree(comment.replies, ids),
-        }
-      }
-      return comment
-    })
-}
 
 /**
  * Hook to send a comment with optimistic updates

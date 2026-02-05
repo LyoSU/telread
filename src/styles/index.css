@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Google Fonts loaded via <link> in index.html to avoid render-blocking @import */
 
 @tailwind base;
 @tailwind components;
@@ -99,7 +99,7 @@
     /* Smooth font rendering */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
+    text-rendering: optimizeSpeed;
     
     /* Prevent iOS text size adjustment */
     -webkit-text-size-adjust: 100%;
@@ -116,8 +116,6 @@
     touch-action: manipulation;
     overscroll-behavior: none;
     
-    /* Smooth scrolling */
-    scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
   }
   

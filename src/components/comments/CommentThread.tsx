@@ -1,5 +1,4 @@
 import { For, Show, createSignal } from 'solid-js'
-import { Motion } from 'solid-motionone'
 import { CommentItem } from './CommentItem'
 import { ReplyComposer } from './ReplyComposer'
 import type { Comment } from '@/lib/telegram'
@@ -47,10 +46,7 @@ export function CommentThread(props: CommentThreadProps) {
   const showLine = () => props.showThreadLine || (hasReplies() && showReplies())
 
   return (
-    <Motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-    >
+    <div>
       <CommentItem
         comment={props.comment}
         discussionChatId={props.discussionChatId}
@@ -67,18 +63,13 @@ export function CommentThread(props: CommentThreadProps) {
 
       {/* Reply composer */}
       <Show when={isReplying()}>
-        <Motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          class="ml-10 mb-3"
-        >
+        <div class="ml-10 mb-3">
           <ReplyComposer
             onSubmit={handleReply}
             onCancel={() => setIsReplying(false)}
             isSending={props.isSending}
           />
-        </Motion.div>
+        </div>
       </Show>
 
 
@@ -98,6 +89,6 @@ export function CommentThread(props: CommentThreadProps) {
           )}
         </For>
       </Show>
-    </Motion.div>
+    </div>
   )
 }

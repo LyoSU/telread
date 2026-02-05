@@ -426,9 +426,11 @@ export function PostMedia(props: PostMediaProps) {
         <Portal>
           <VideoModal
             url={fullQuery.data ?? undefined}
-            isLoading={fullQuery.isLoading}
+            isLoading={fullQuery.isLoading || fullQuery.isFetching}
+            isError={fullQuery.isError}
             isRound={props.media.type === 'video_note'}
             onClose={() => setIsExpanded(false)}
+            onRetry={() => fullQuery.refetch()}
           />
         </Portal>
       </Show>

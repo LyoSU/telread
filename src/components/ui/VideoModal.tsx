@@ -1,13 +1,19 @@
 import { createSignal, Show, onMount, onCleanup } from 'solid-js'
-import { X } from 'lucide-solid'
+import { X, RefreshCw } from 'lucide-solid'
 import { lockScroll, unlockScroll } from '@/lib/utils'
 
 interface VideoModalProps {
   url: string | null | undefined
   isLoading?: boolean
+  isError?: boolean
   isRound?: boolean
   onClose: () => void
+  onRetry?: () => void
 }
+
+// Module-level flag: signals that a previous VideoModal is cleaning up
+// and its history.back() will fire a stale popstate event
+let cleanupPending = false
 
 /**
  * Fullscreen video modal with native controls
@@ -16,6 +22,7 @@ interface VideoModalProps {
  * - Swipe down to close
  * - Back button handling
  * - Esc key to close
+ * - Error state with retry
  */
 export function VideoModal(props: VideoModalProps) {
   let closedByBack = false
@@ -50,13 +57,17 @@ export function VideoModal(props: VideoModalProps) {
   }
 
   const handlePopState = () => {
+    // Skip stale popstate events from a previous instance's cleanup
+    if (cleanupPending) {
+      cleanupPending = false
+      return
+    }
     closedByBack = true
     props.onClose()
   }
 
   const close = () => {
     if (closedByBack) {
-      // Already closing via back button - just call onClose
       props.onClose()
     } else {
       // Closing via X button or swipe - history.back() will trigger popstate -> onClose
@@ -65,6 +76,8 @@ export function VideoModal(props: VideoModalProps) {
   }
 
   onMount(() => {
+    // Clear stale flag if it survived from a previous instance
+    cleanupPending = false
     document.addEventListener('keydown', handleKeyDown)
     lockScroll()
     history.pushState({ modal: 'video' }, '')
@@ -78,17 +91,26 @@ export function VideoModal(props: VideoModalProps) {
     // If modal is being unmounted without going through back button,
     // remove the history entry we pushed to prevent broken navigation
     if (!closedByBack && history.state?.modal === 'video') {
+      // Signal to skip the stale popstate in any new instance
+      cleanupPending = true
       history.back()
+      // Auto-clear if no new instance picks it up
+      setTimeout(() => { cleanupPending = false }, 100)
     }
   })
 
   const opacity = () => Math.max(0, 1 - offsetY() / 300)
 
+  // Only allow backdrop-close when video is loaded (prevents accidental close during loading)
+  const handleBackdropClick = () => {
+    if (props.url) close()
+  }
+
   return (
     <div
       class="fixed inset-0 z-[9999] flex items-center justify-center"
       style={{ 'background-color': `rgba(0, 0, 0, ${opacity()})` }}
-      onClick={close}
+      onClick={handleBackdropClick}
     >
       {/* Close button */}
       <button
@@ -119,9 +141,32 @@ export function VideoModal(props: VideoModalProps) {
         <Show
           when={props.url}
           fallback={
-            <Show when={props.isLoading}>
-              <div class="animate-spin w-10 h-10 border-2 border-white border-t-transparent rounded-full" />
-            </Show>
+            <>
+              {/* Loading spinner */}
+              <Show when={props.isLoading}>
+                <div class="animate-spin w-10 h-10 border-2 border-white border-t-transparent rounded-full" />
+              </Show>
+
+              {/* Error state with retry */}
+              <Show when={props.isError && !props.isLoading}>
+                <div class="flex flex-col items-center gap-4 text-white">
+                  <p class="text-sm text-white/70">Failed to load video</p>
+                  <Show when={props.onRetry}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        props.onRetry?.()
+                      }}
+                      class="flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 text-sm font-medium transition-colors"
+                    >
+                      <RefreshCw size={16} />
+                      Retry
+                    </button>
+                  </Show>
+                </div>
+              </Show>
+            </>
           }
         >
           {(url) => (

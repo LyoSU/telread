@@ -73,12 +73,12 @@ export function strippedToDataUrl(stripped: Uint8Array): string | undefined {
   jpeg[164] = stripped[1]
   jpeg[166] = stripped[2]
   
-  // Convert to base64 data URL
-  let binary = ''
-  for (let i = 0; i < jpeg.length; i++) {
-    binary += String.fromCharCode(jpeg[i])
+  // Convert to base64 data URL — chunk-based to avoid O(n²) string concatenation
+  const chunks: string[] = []
+  for (let i = 0; i < jpeg.length; i += 8192) {
+    chunks.push(String.fromCharCode(...jpeg.subarray(i, i + 8192)))
   }
-  return `data:image/jpeg;base64,${btoa(binary)}`
+  return `data:image/jpeg;base64,${btoa(chunks.join(''))}`
 }
 
 // ============================================================================
