@@ -223,8 +223,8 @@ export function ChannelCard(props: ChannelCardProps) {
         </div>
       </div>
 
-      {/* Content card with glass effect */}
-      <div class="relative glass-card -mt-8 mx-3 mb-3 p-4">
+      {/* Content card with glass effect — override contain to exclude paint so avatar can extend above */}
+      <div class="relative glass-card -mt-8 mx-3 mb-3 p-4" style={{ contain: 'layout style' }}>
         {/* Avatar - positioned to overlap banner */}
         <div class="flex items-end gap-4 -mt-14 mb-3">
           <div class="relative">

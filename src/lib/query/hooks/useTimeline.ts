@@ -28,7 +28,7 @@ import {
   setArchivedChannelIds,
   isChannelArchived,
 } from '@/lib/store'
-import { getTime, groupPostsByMediaGroup } from '@/lib/utils'
+import { getTime, groupPostsByMediaGroup, type TimelineItem } from '@/lib/utils'
 import { queryKeys } from '../keys'
 import { TIMING } from '@/config/constants'
 
@@ -387,6 +387,11 @@ export function useOptimizedTimeline() {
     )
   )
 
+  // Cache for stable item references — prevents <For> from remounting components
+  // when the timeline memo recomputes but individual items haven't changed.
+  // SolidJS <For> uses reference identity; new wrapper objects → full remount → media flicker.
+  let itemCache = new Map<string, TimelineItem>()
+
   // Reactive timeline from centralized store
   // Only re-runs when sortedKeys order changes (post add/remove) or filter settings change
   // byId content changes (views, reactions) are untracked — they don't affect grouping/filtering
@@ -412,7 +417,42 @@ export function useOptimizedTimeline() {
       }
 
       // Group posts by groupedId for albums
-      return groupPostsByMediaGroup(posts)
+      const items = groupPostsByMediaGroup(posts)
+
+      // Stabilize references: reuse cached objects when underlying data is identical.
+      // This prevents <For> from treating unchanged items as new (causing media remount/flicker).
+      const nextCache = new Map<string, TimelineItem>()
+      const stable: TimelineItem[] = new Array(items.length)
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        const key = item.type === 'single'
+          ? `${item.post.channelId}:${item.post.id}`
+          : `g:${item.groupedId}`
+
+        const cached = itemCache.get(key)
+        if (cached && cached.type === item.type) {
+          // Compare store proxy references — stable unless the post was reassigned
+          if (item.type === 'single' && cached.type === 'single' && cached.post === item.post) {
+            stable[i] = cached
+            nextCache.set(key, cached)
+            continue
+          }
+          if (item.type === 'group' && cached.type === 'group' &&
+              cached.posts.length === item.posts.length &&
+              cached.posts.every((p, j) => p === item.posts[j])) {
+            stable[i] = cached
+            nextCache.set(key, cached)
+            continue
+          }
+        }
+
+        stable[i] = item
+        nextCache.set(key, item)
+      }
+
+      itemCache = nextCache
+      return stable
     })
   })
 
