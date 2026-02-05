@@ -87,32 +87,15 @@ export function strippedToDataUrl(stripped: Uint8Array): string | undefined {
 
 /**
  * LRU (Least Recently Used) cache for blob URLs
- * Automatically evicts oldest entries with delayed blob URL revocation to prevent memory leaks
- * while allowing components time to finish rendering
+ * Evicts oldest entries without revoking — TanStack Query holds references beyond LRU lifetime.
+ * Only explicit clear()/delete() revoke URLs (logout, manual cleanup).
  */
 class MediaLRUCache {
   private cache = new Map<string, string>()
   private readonly maxSize: number
-  private pendingRevocations = new Set<string>()
-  private revocationTimer: number | null = null
 
   constructor(maxSize: number) {
     this.maxSize = maxSize
-  }
-
-  /**
-   * Schedule delayed revocation of blob URLs
-   * Mobile: 5s delay (free memory faster), Desktop: 30s delay
-   */
-  private scheduleRevocation(): void {
-    if (this.revocationTimer) return
-    this.revocationTimer = window.setTimeout(() => {
-      for (const url of this.pendingRevocations) {
-        URL.revokeObjectURL(url)
-      }
-      this.pendingRevocations.clear()
-      this.revocationTimer = null
-    }, isMobile ? 5000 : 30000)
   }
 
   get(key: string): string | undefined {
@@ -121,40 +104,22 @@ class MediaLRUCache {
       // Move to end (most recently used)
       this.cache.delete(key)
       this.cache.set(key, value)
-      // If this URL was pending revocation, remove it from the set
-      this.pendingRevocations.delete(value)
     }
     return value
   }
 
   set(key: string, value: string): void {
-    // If key exists, check if value is the same
+    // If key exists, update position
     if (this.cache.has(key)) {
-      const oldValue = this.cache.get(key)
-      if (oldValue === value) {
-        // Same value - just update position (move to end)
-        this.cache.delete(key)
-        this.cache.set(key, value)
-        return
-      }
-      // Different value - schedule old URL for delayed revocation
-      if (oldValue) {
-        this.pendingRevocations.add(oldValue)
-        this.scheduleRevocation()
-      }
       this.cache.delete(key)
     }
 
-    // Evict oldest entries if at capacity with delayed revocation
+    // Evict oldest entries if at capacity
+    // Don't revoke blob URLs — TanStack Query may still hold references.
+    // Browser GC frees blob data after all references (DOM + JS) are gone.
     while (this.cache.size >= this.maxSize) {
       const oldestKey = this.cache.keys().next().value
       if (oldestKey) {
-        const oldestValue = this.cache.get(oldestKey)
-        if (oldestValue) {
-          // Schedule for delayed revocation instead of immediate
-          this.pendingRevocations.add(oldestValue)
-          this.scheduleRevocation()
-        }
         this.cache.delete(oldestKey)
       }
     }
@@ -179,20 +144,9 @@ class MediaLRUCache {
   }
 
   /**
-   * Clear all entries and revoke all blob URLs
+   * Clear all entries and revoke all blob URLs (used on logout)
    */
   clear(): void {
-    // Clear pending revocations timer
-    if (this.revocationTimer) {
-      window.clearTimeout(this.revocationTimer)
-      this.revocationTimer = null
-    }
-    // Revoke pending URLs
-    for (const url of this.pendingRevocations) {
-      URL.revokeObjectURL(url)
-    }
-    this.pendingRevocations.clear()
-    // Revoke cached URLs
     for (const url of this.cache.values()) {
       URL.revokeObjectURL(url)
     }
@@ -301,38 +255,16 @@ const PROFILE_CACHE_TTL = 1000 * 60 * 60 * 24 * 7 // 7 days
 const MAX_PROFILE_PHOTO_CACHE = 200
 const profilePhotoCache = new Map<string, string>()
 
-// URLs pending delayed revocation (gives components time to release references)
-const pendingProfileRevocations = new Set<string>()
-let profileRevocationTimer: number | null = null
-
-function scheduleProfileRevocation(): void {
-  if (profileRevocationTimer) return
-  profileRevocationTimer = window.setTimeout(() => {
-    for (const url of pendingProfileRevocations) {
-      URL.revokeObjectURL(url)
-    }
-    pendingProfileRevocations.clear()
-    profileRevocationTimer = null
-  }, isMobile ? 5000 : 30000)
-}
-
 function addToProfilePhotoCache(key: string, url: string): void {
   // Soft eviction when cache is too large - remove oldest 20%
+  // Don't revoke blob URLs — TanStack Query may still hold references.
   if (profilePhotoCache.size >= MAX_PROFILE_PHOTO_CACHE) {
     const toRemove = Math.floor(MAX_PROFILE_PHOTO_CACHE * 0.2)
     const keys = Array.from(profilePhotoCache.keys()).slice(0, toRemove)
     for (const k of keys) {
-      const evictedUrl = profilePhotoCache.get(k)
-      if (evictedUrl) {
-        // Schedule delayed revocation instead of leaking
-        pendingProfileRevocations.add(evictedUrl)
-        scheduleProfileRevocation()
-      }
       profilePhotoCache.delete(k)
     }
   }
-  // If this URL was pending revocation, cancel it
-  pendingProfileRevocations.delete(url)
   profilePhotoCache.set(key, url)
 }
 
@@ -399,8 +331,6 @@ async function cacheProfilePhoto(peerId: number, size: string, buffer: Uint8Arra
 // ============================================================================
 // Download Queue Management
 // ============================================================================
-
-// isMobile imported from @/config/constants
 
 // Increased limits for faster loading
 const MAX_MEDIA_DOWNLOADS = isMobile ? 6 : 10
@@ -953,16 +883,6 @@ export async function preloadThumbnails(
  */
 export function clearMediaCache(): void {
   mediaCache.clear()
-
-  // Clear pending profile photo revocations
-  if (profileRevocationTimer) {
-    window.clearTimeout(profileRevocationTimer)
-    profileRevocationTimer = null
-  }
-  for (const url of pendingProfileRevocations) {
-    URL.revokeObjectURL(url)
-  }
-  pendingProfileRevocations.clear()
 
   // Revoke profile photo blob URLs and clear cache
   for (const url of profilePhotoCache.values()) {
