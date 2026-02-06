@@ -8,6 +8,8 @@ interface DownloadOverlayProps {
   state: DownloadState
   /** Size variant — 'sm' for galleries, 'md' for inline players */
   size?: 'sm' | 'md'
+  /** Circular clipping for video notes */
+  round?: boolean
   /** Formatted file size shown during loading (e.g., "12.5 MB") */
   fileSize?: string
   /** Called when user taps retry on error */
@@ -27,13 +29,14 @@ interface DownloadOverlayProps {
  */
 export function DownloadOverlay(props: DownloadOverlayProps) {
   const sm = () => props.size === 'sm'
+  const shape = () => props.round ? 'rounded-full' : ''
 
   return (
     <Switch>
       {/* Error — tap to retry */}
       <Match when={props.state === 'error'}>
         <div
-          class="absolute inset-0 flex flex-col items-center justify-center bg-black/30"
+          class={`absolute inset-0 flex flex-col items-center justify-center bg-black/30 ${shape()}`}
           onClick={(e) => { e.stopPropagation(); props.onRetry?.() }}
         >
           <div
@@ -46,7 +49,7 @@ export function DownloadOverlay(props: DownloadOverlayProps) {
 
       {/* Downloading */}
       <Match when={props.state === 'loading'}>
-        <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/30 pointer-events-none">
+        <div class={`absolute inset-0 flex flex-col items-center justify-center bg-black/30 pointer-events-none ${shape()}`}>
           <div
             class={`${sm() ? 'w-10 h-10' : 'w-14 h-14'} rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center`}
           >
@@ -64,7 +67,7 @@ export function DownloadOverlay(props: DownloadOverlayProps) {
 
       {/* Ready — play icon */}
       <Match when={props.state === 'ready'}>
-        <div class="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
+        <div class={`absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none ${shape()}`}>
           <div
             class={`${sm() ? 'w-10 h-10' : 'w-14 h-14'} rounded-full bg-white/90 flex items-center justify-center shadow-lg`}
           >

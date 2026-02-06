@@ -5,7 +5,7 @@ import type { MessageMedia } from '@/lib/telegram'
 import { useMedia } from '@/lib/query'
 import { mediaController } from '@/lib/media'
 import { Skeleton, Lightbox, VideoModal, DownloadOverlay, type LightboxItem } from '@/components/ui'
-import { Play, Pause, FileText, Music, MapPin, User, ExternalLink, Volume2, VolumeX } from 'lucide-solid'
+import { Play, Pause, FileText, Music, MapPin, User, ExternalLink, Volume2, VolumeX, RefreshCw } from 'lucide-solid'
 
 interface PostMediaProps {
   channelId: number
@@ -515,8 +515,12 @@ function InlineVoicePlayer(props: {
 
   const handlePlayPause = (e: MouseEvent) => {
     e.stopPropagation()
+    if (!audioQuery.data) {
+      if (audioQuery.isError) audioQuery.refetch()
+      return
+    }
     if (!audioRef) return
-    
+
     if (isPlaying()) {
       mediaController.pause(mediaId)
     } else {
@@ -548,21 +552,27 @@ function InlineVoicePlayer(props: {
 
   return (
     <div ref={setupContainer} class="glass rounded-xl p-3 flex items-center gap-3">
-      {/* Play/Pause button */}
+      {/* Play/Pause button — shows spinner while loading, retry on error */}
       <button
         type="button"
         aria-label={isPlaying() ? 'Pause' : 'Play voice message'}
         onClick={handlePlayPause}
-        disabled={!audioQuery.data}
+        disabled={!audioQuery.data && !audioQuery.isError}
         class="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center flex-shrink-0
                hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-accent
                disabled:opacity-50"
       >
-        <Show when={isPlaying()} fallback={
-          <Play size={20} class="text-white ml-0.5" fill="currentColor" />
-        }>
-          <Pause size={20} class="text-white" fill="currentColor" />
-        </Show>
+        <Switch fallback={<Play size={20} class="text-white ml-0.5" fill="currentColor" />}>
+          <Match when={!audioQuery.data && audioQuery.isError}>
+            <RefreshCw size={18} class="text-white" />
+          </Match>
+          <Match when={!audioQuery.data}>
+            <div class="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+          </Match>
+          <Match when={isPlaying()}>
+            <Pause size={20} class="text-white" fill="currentColor" />
+          </Match>
+        </Switch>
       </button>
 
       {/* Interactive Waveform */}
@@ -692,8 +702,8 @@ function InlineVideoNote(props: {
 
   const handleClick = (e: MouseEvent) => {
     e.stopPropagation()
-    if (!videoRef) return
-    
+    if (!videoQuery.data || !videoRef) return
+
     if (isPlaying()) {
       // If playing, toggle mute first, then pause on second tap
       if (isMuted()) {
@@ -717,7 +727,7 @@ function InlineVideoNote(props: {
   return (
     <div 
       ref={setupContainer}
-      class="relative cursor-pointer group"
+      class={`relative ${videoQuery.data ? 'cursor-pointer' : ''} group`}
       style={{ width: `${size}px`, height: `${size}px` }}
       onClick={handleClick}
     >
@@ -778,13 +788,13 @@ function InlineVideoNote(props: {
         />
       </svg>
 
-      {/* Play overlay (when not playing) */}
+      {/* Download state overlay */}
       <Show when={!isPlaying()}>
-        <div class="absolute inset-0 flex items-center justify-center bg-black/30 rounded-full group-hover:bg-black/40 transition-colors">
-          <div class="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-            <Play size={24} class="text-gray-900 ml-0.5" fill="currentColor" />
-          </div>
-        </div>
+        <DownloadOverlay
+          state={!videoQuery.data ? (videoQuery.isError ? 'error' : 'loading') : 'ready'}
+          round
+          onRetry={() => videoQuery.refetch()}
+        />
       </Show>
 
       {/* Mute indicator (when playing and muted) */}
@@ -864,8 +874,12 @@ function InlineAudioPlayer(props: {
 
   const handlePlayPause = (e: MouseEvent) => {
     e.stopPropagation()
+    if (!audioQuery.data) {
+      if (audioQuery.isError) audioQuery.refetch()
+      return
+    }
     if (!audioRef) return
-    
+
     if (isPlaying()) {
       mediaController.pause(mediaId)
     } else {
@@ -906,21 +920,27 @@ function InlineAudioPlayer(props: {
           </p>
         </div>
 
-        {/* Play/Pause button */}
+        {/* Play/Pause button — shows spinner while loading, retry on error */}
         <button
           type="button"
           aria-label={isPlaying() ? 'Pause' : 'Play audio'}
           onClick={handlePlayPause}
-          disabled={!audioQuery.data}
+          disabled={!audioQuery.data && !audioQuery.isError}
           class="w-10 h-10 rounded-full bg-[var(--accent)] flex items-center justify-center flex-shrink-0
                  hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-accent
                  disabled:opacity-50"
         >
-          <Show when={isPlaying()} fallback={
-            <Play size={20} class="text-white ml-0.5" fill="currentColor" />
-          }>
-            <Pause size={20} class="text-white" fill="currentColor" />
-          </Show>
+          <Switch fallback={<Play size={20} class="text-white ml-0.5" fill="currentColor" />}>
+            <Match when={!audioQuery.data && audioQuery.isError}>
+              <RefreshCw size={18} class="text-white" />
+            </Match>
+            <Match when={!audioQuery.data}>
+              <div class="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+            </Match>
+            <Match when={isPlaying()}>
+              <Pause size={20} class="text-white" fill="currentColor" />
+            </Match>
+          </Switch>
         </button>
       </div>
 
@@ -1231,6 +1251,11 @@ function StickerPlayer(props: {
             height={props.media.height || 160}
           />
         </Show>
+        <DownloadOverlay
+          state={mediaQuery.isError ? 'error' : 'loading'}
+          size="sm"
+          onRetry={() => mediaQuery.refetch()}
+        />
       </Show>
     </div>
   )
@@ -1284,6 +1309,11 @@ function GifPlayer(props: {
             height={props.media.height || MEDIA.DEFAULT_HEIGHT}
           />
         </Show>
+        <DownloadOverlay
+          state={gifQuery.isError ? 'error' : 'loading'}
+          fileSize={props.media.size ? formatFileSize(props.media.size) : undefined}
+          onRetry={() => gifQuery.refetch()}
+        />
       </Show>
     </div>
   )
