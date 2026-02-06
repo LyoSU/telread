@@ -1,11 +1,10 @@
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
-import { Portal } from 'solid-js/web'
 import { TimelinePost } from './TimelinePost'
 import { TimelineGroup } from './TimelineGroup'
 import { PostSkeleton } from '@/components/ui'
 import { INFINITE_SCROLL_THRESHOLD, TIMING, isMobile } from '@/config/constants'
 import { haptic } from '@/lib/utils'
-import { Newspaper, ChevronUp } from 'lucide-solid'
+import { Newspaper } from 'lucide-solid'
 import type { Channel } from '@/lib/telegram'
 import type { Message } from '@/lib/telegram'
 import type { TimelineItem } from '@/lib/utils'
@@ -132,18 +131,13 @@ export function Timeline(props: TimelineProps) {
   let containerRef: HTMLDivElement | undefined
   let scrollParent: HTMLElement | null = null
   let loadMoreRef: HTMLDivElement | undefined
-  let topSentinelRef: HTMLDivElement | undefined
   let loadMoreObserver: IntersectionObserver | null = null
-  let topObserver: IntersectionObserver | null = null
   let restoreTimer: ReturnType<typeof setTimeout> | null = null
   let rafId: number | null = null
 
   // Flag to prevent scroll restoration after user has scrolled
   let hasUserScrolled = false
   let scrollRestored = false
-
-  // Scroll-to-top button (uses IntersectionObserver — no scroll event overhead)
-  const [showScrollTop, setShowScrollTop] = createSignal(false)
 
   // Pull-to-refresh state (mobile only)
   const [pullDistance, setPullDistance] = createSignal(0)
@@ -210,16 +204,6 @@ export function Timeline(props: TimelineProps) {
     if (!scrollParent) return
     // Mark that user has scrolled - prevents unwanted scroll restoration
     hasUserScrolled = true
-  }
-
-  // Setup IntersectionObserver for scroll-to-top button
-  const setupScrollTopObserver = () => {
-    if (!topSentinelRef || !scrollParent) return
-    topObserver = new IntersectionObserver(
-      ([entry]) => setShowScrollTop(!entry.isIntersecting),
-      { root: scrollParent, rootMargin: '200px', threshold: 0 }
-    )
-    topObserver.observe(topSentinelRef)
   }
 
   // Setup pull-to-refresh (touch devices only)
@@ -311,7 +295,6 @@ export function Timeline(props: TimelineProps) {
 
     queueMicrotask(() => {
       setupLoadMoreObserver()
-      setupScrollTopObserver()
       setupPullToRefresh()
     })
   })
@@ -331,11 +314,6 @@ export function Timeline(props: TimelineProps) {
     if (loadMoreObserver) {
       loadMoreObserver.disconnect()
       loadMoreObserver = null
-    }
-
-    if (topObserver) {
-      topObserver.disconnect()
-      topObserver = null
     }
 
     if (restoreTimer) {
@@ -369,9 +347,6 @@ export function Timeline(props: TimelineProps) {
           />
         </div>
       </Show>
-
-      {/* Scroll-to-top sentinel */}
-      <div ref={topSentinelRef} class="h-px" aria-hidden="true" />
 
       {/* Empty state */}
       <Show when={isEmpty()}>
@@ -431,24 +406,6 @@ export function Timeline(props: TimelineProps) {
         <div class="text-center py-8 text-sm text-tertiary">You've reached the end</div>
       </Show>
 
-      {/* Scroll to top — Portal escapes PageTransition's containing block */}
-      <Portal>
-        <button
-          type="button"
-          class="fixed z-40 w-10 h-10 rounded-full flex items-center justify-center bg-[var(--color-bg)] border border-[var(--nav-border)] text-[var(--color-text-secondary)] active:scale-95 bottom-24 right-4 lg:bottom-6 lg:right-6 transition-opacity duration-200"
-          classList={{
-            'opacity-100 pointer-events-auto shadow-md': showScrollTop(),
-            'opacity-0 pointer-events-none': !showScrollTop(),
-          }}
-          onClick={() => {
-            haptic('light')
-            scrollParent?.scrollTo({ top: 0, behavior: 'smooth' })
-          }}
-          aria-label="Scroll to top"
-        >
-          <ChevronUp size={20} />
-        </button>
-      </Portal>
     </div>
   )
 }
