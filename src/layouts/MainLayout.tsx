@@ -30,11 +30,9 @@ export function MainLayout(props: ParentProps) {
   /** Navigate to home or handle home-tap if already there */
   const handleHomeTap = () => {
     haptic('light')
-    if (window.location.pathname === '/') {
-      // Scroll to top instantly
+    if (location.pathname === '/') {
       const scrollEl = mainRef ?? document.querySelector('.main-scroll-container') as HTMLElement | null
       if (scrollEl) scrollEl.scrollTop = 0
-      // Signal Home.tsx to refresh
       triggerHomeTap()
     } else {
       navigate('/')
@@ -98,14 +96,13 @@ export function MainLayout(props: ParentProps) {
           {navItems.map((item) => {
             const active = () => isActive(item.path)
 
-            // Home button: <button> with on:click (direct binding, not delegated)
             if (item.path === '/') {
               return (
                 <button
                   type="button"
                   class={`threads-nav-item ${active() ? 'threads-nav-item-active' : ''}`}
                   title={item.label}
-                  on:click={handleHomeTap}
+                  onClick={handleHomeTap}
                 >
                   {item.icon(active())}
                 </button>
@@ -156,7 +153,7 @@ export function MainLayout(props: ParentProps) {
           <button
             type="button"
             class={`nav-item ${isActive('/') ? 'nav-item-active' : ''}`}
-            on:click={handleHomeTap}
+            onClick={handleHomeTap}
           >
             <Home size={28} stroke-width={isActive('/') ? 2.5 : 1.5} />
           </button>

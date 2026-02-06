@@ -82,7 +82,6 @@ function Home() {
             timeline.showNewPosts()
             return
         }
-        // Show refresh spinner, then refresh
         setIsRefreshing(true)
         try {
             await timeline.refresh()
