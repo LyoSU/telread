@@ -28,6 +28,8 @@ interface TimelineProps {
   channelMap?: Map<number, Channel>
   /** Pull-to-refresh callback — return promise to keep spinner until complete */
   onRefresh?: () => Promise<unknown> | void
+  /** Programmatic refresh in progress (shows spinner without pull gesture) */
+  refreshing?: boolean
 }
 
 /**
@@ -332,17 +334,17 @@ export function Timeline(props: TimelineProps) {
 
   return (
     <div ref={containerRef} class="min-h-full pb-24">
-      {/* Pull-to-refresh indicator */}
-      <Show when={pullDistance() > 0 || isRefreshing()}>
+      {/* Pull-to-refresh / programmatic refresh indicator */}
+      <Show when={pullDistance() > 0 || isRefreshing() || props.refreshing}>
         <div
           class="flex justify-center items-center overflow-hidden"
-          style={{ height: `${isRefreshing() ? PULL_THRESHOLD : pullDistance()}px` }}
+          style={{ height: `${(isRefreshing() || props.refreshing) ? PULL_THRESHOLD : pullDistance()}px` }}
         >
           <div
-            class={`w-5 h-5 rounded-full border-2 border-[var(--accent)] ${isRefreshing() ? 'animate-spin border-t-transparent' : ''}`}
+            class={`w-5 h-5 rounded-full border-2 border-[var(--accent)] ${(isRefreshing() || props.refreshing) ? 'animate-spin border-t-transparent' : ''}`}
             style={{
-              opacity: Math.min(pullDistance() / PULL_THRESHOLD, 1),
-              transform: isRefreshing() ? '' : `rotate(${pullDistance() * 4}deg)`,
+              opacity: (isRefreshing() || props.refreshing) ? 1 : Math.min(pullDistance() / PULL_THRESHOLD, 1),
+              transform: (isRefreshing() || props.refreshing) ? '' : `rotate(${pullDistance() * 4}deg)`,
             }}
           />
         </div>

@@ -18,6 +18,7 @@ import { fetchMessages } from '@/lib/telegram/messages'
  */
 function Home() {
     const timeline = useOptimizedTimeline()
+    const [isRefreshing, setIsRefreshing] = createSignal(false)
 
     // AbortController for cancelling in-flight folder sync requests
     let folderSyncAbortController: AbortController | null = null
@@ -76,13 +77,17 @@ function Home() {
 
     // Listen for home tap when already at top
     onMount(() => {
-        const handleHomeTap = () => {
+        const handleHomeTap = async () => {
             if (timeline.pendingCount > 0) {
-                // Show new posts first
                 timeline.showNewPosts()
-            } else {
-                // No pending posts - refresh feed
-                timeline.refresh()
+                return
+            }
+            // Show refresh spinner, then refresh
+            setIsRefreshing(true)
+            try {
+                await timeline.refresh()
+            } finally {
+                setIsRefreshing(false)
             }
         }
         window.addEventListener('home-tap-top', handleHomeTap)
@@ -267,6 +272,7 @@ function Home() {
                 pendingCount={timeline.pendingCount}
                 onShowNewPosts={timeline.showNewPosts}
                 scrollKey="home"
+                refreshing={isRefreshing()}
                 onRefresh={async () => {
                     if (timeline.pendingCount > 0) timeline.showNewPosts()
                     await timeline.refresh()

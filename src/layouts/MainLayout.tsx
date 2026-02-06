@@ -1,5 +1,5 @@
 import { type ParentProps, type JSX, Show } from 'solid-js'
-import { A, useLocation } from '@solidjs/router'
+import { A, useLocation, useNavigate } from '@solidjs/router'
 import { authStore, updateStore } from '@/lib/store'
 import { haptic } from '@/lib/utils'
 import { UserAvatar, PageTransition } from '@/components/ui'
@@ -23,14 +23,28 @@ function UpdateBadge() {
  */
 export function MainLayout(props: ParentProps) {
   const location = useLocation()
+  const navigate = useNavigate()
   let mainRef: HTMLElement | undefined
 
   const handleHomeClick = () => {
     haptic('light')
-    if (mainRef && mainRef.scrollTop > 0) {
-      mainRef.scrollTo({ top: 0, behavior: 'smooth' })
+    // Find the actual scroll container robustly
+    const scrollEl = mainRef ?? document.querySelector('.main-scroll-container') as HTMLElement | null
+    if (scrollEl && scrollEl.scrollTop > 0) {
+      scrollEl.scrollTo({ top: 0, behavior: 'smooth' })
     } else {
+      // At top or no scroll — trigger refresh
       window.dispatchEvent(new CustomEvent('home-tap-top'))
+    }
+  }
+
+  /** Navigate to home or handle home-tap if already there */
+  const handleHomeTap = () => {
+    haptic('light')
+    if (location.pathname === '/') {
+      handleHomeClick()
+    } else {
+      navigate('/')
     }
   }
 
@@ -90,29 +104,30 @@ export function MainLayout(props: ParentProps) {
         <nav class="flex-1 flex flex-col items-center justify-center gap-2">
           {navItems.map((item) => {
             const active = () => isActive(item.path)
-            return (
-              <Show
-                when={item.path === '/' && active()}
-                fallback={
-                  <A
-                    href={item.path}
-                    class={`threads-nav-item ${active() ? 'threads-nav-item-active' : ''}`}
-                    title={item.label}
-                    onClick={handleNavClick}
-                  >
-                    {item.icon(active())}
-                  </A>
-                }
-              >
+
+            // Home button: always <button> to avoid router click interception
+            if (item.path === '/') {
+              return (
                 <button
                   type="button"
-                  class="threads-nav-item threads-nav-item-active"
+                  class={`threads-nav-item ${active() ? 'threads-nav-item-active' : ''}`}
                   title={item.label}
-                  onClick={handleHomeClick}
+                  onClick={handleHomeTap}
                 >
-                  {item.icon(true)}
+                  {item.icon(active())}
                 </button>
-              </Show>
+              )
+            }
+
+            return (
+              <A
+                href={item.path}
+                class={`threads-nav-item ${active() ? 'threads-nav-item-active' : ''}`}
+                title={item.label}
+                onClick={handleNavClick}
+              >
+                {item.icon(active())}
+              </A>
             )
           })}
         </nav>
@@ -145,18 +160,13 @@ export function MainLayout(props: ParentProps) {
 
         {/* Center: Nav items (Home, Bookmarks) */}
         <nav class="floating-pill">
-          <Show
-            when={isActive('/')}
-            fallback={
-              <A href="/" class="nav-item" onClick={handleNavClick}>
-                <Home size={28} stroke-width={1.5} />
-              </A>
-            }
+          <button
+            type="button"
+            class={`nav-item ${isActive('/') ? 'nav-item-active' : ''}`}
+            onClick={handleHomeTap}
           >
-            <button type="button" class="nav-item nav-item-active" onClick={handleHomeClick}>
-              <Home size={28} stroke-width={2.5} />
-            </button>
-          </Show>
+            <Home size={28} stroke-width={isActive('/') ? 2.5 : 1.5} />
+          </button>
           <A
             href="/bookmarks"
             class={`nav-item ${isActive('/bookmarks') ? 'nav-item-active' : ''}`}
