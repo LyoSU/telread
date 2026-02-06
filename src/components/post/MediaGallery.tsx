@@ -1,6 +1,6 @@
 import { For, Show, createSignal, createMemo, onCleanup } from 'solid-js'
 import { Portal } from 'solid-js/web'
-import { useMedia } from '@/lib/query'
+import { useMedia, queryClient, queryKeys } from '@/lib/query'
 import { VideoModal, Lightbox, DownloadOverlay, type LightboxItem } from '@/components/ui'
 import type { MessageMedia } from '@/lib/telegram'
 import { MEDIA, isMobile } from '@/config/constants'
@@ -62,15 +62,20 @@ export function MediaGallery(props: MediaGalleryProps) {
     () => expandedIndex() !== null && isExpandedVideo()
   )
 
-  // Build lightbox items from photos — full-res queries are managed per GalleryItem
-  // Here we just use thumbs; the Lightbox component will show what's available
+  // Build lightbox items using large thumbnails from TanStack cache
+  // (already downloaded by each GalleryItem's mediaQuery — no extra requests)
   const lightboxItems = createMemo((): LightboxItem[] => {
-    return photoItems().map(({ item }) => ({
-      src: item.media.thumb || '',
-      width: item.media.width || 1200,
-      height: item.media.height || 800,
-      thumb: item.media.thumb,
-    }))
+    return photoItems().map(({ item }) => {
+      const cachedUrl = queryClient.getQueryData<string>(
+        queryKeys.media.download(item.channelId, item.messageId, 'large')
+      )
+      return {
+        src: cachedUrl || item.media.thumb || '',
+        width: item.media.width || 1200,
+        height: item.media.height || 800,
+        thumb: item.media.thumb,
+      }
+    })
   })
 
   const handleItemClick = (index: number) => {

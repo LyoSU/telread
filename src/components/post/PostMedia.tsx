@@ -46,11 +46,13 @@ export function PostMedia(props: PostMediaProps) {
   )
 
   // Lightbox item for PhotoSwipe (photos only)
+  // Uses large thumbnail (already loaded) as immediate src,
+  // upgrades to full resolution once cached — instant open like Telegram
   const lightboxItems = (): LightboxItem[] => {
     if (props.media.type !== 'photo') return []
-    const url = fullQuery.data
+    const url = fullQuery.data ?? mediaQuery.data
     if (!url) return []
-    
+
     return [{
       src: url,
       width: props.media.width || MEDIA.DEFAULT_WIDTH,
