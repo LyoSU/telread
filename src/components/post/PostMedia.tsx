@@ -4,7 +4,7 @@ import { DEFAULT_ASPECT_RATIO, MEDIA, isMobile } from '@/config/constants'
 import type { MessageMedia } from '@/lib/telegram'
 import { useMedia } from '@/lib/query'
 import { mediaController } from '@/lib/media'
-import { Skeleton, Lightbox, VideoModal, type LightboxItem } from '@/components/ui'
+import { Skeleton, Lightbox, VideoModal, DownloadOverlay, type LightboxItem } from '@/components/ui'
 import { Play, Pause, FileText, Music, MapPin, User, ExternalLink, Volume2, VolumeX } from 'lucide-solid'
 
 interface PostMediaProps {
@@ -1047,8 +1047,10 @@ function InlineVideoPlayer(props: {
   }
 
   // Tap on video = open fullscreen (like Telegram)
+  // Blocked until video is fully downloaded
   const handleVideoClick = (e: MouseEvent) => {
     e.stopPropagation()
+    if (!videoQuery.data) return
     mediaController.pause(mediaId)
     setUserPaused(true)
     props.onExpand()
@@ -1071,7 +1073,7 @@ function InlineVideoPlayer(props: {
   return (
     <div 
       ref={setupContainer}
-      class="relative rounded-2xl overflow-hidden flex-shrink-0 shadow-sm hover:shadow-md transition-shadow bg-black cursor-pointer" 
+      class={`relative rounded-2xl overflow-hidden flex-shrink-0 shadow-sm hover:shadow-md transition-shadow bg-black ${videoQuery.data ? 'cursor-pointer' : ''}`}
       style={props.containerStyle}
       onClick={handleVideoClick}
     >
@@ -1122,21 +1124,15 @@ function InlineVideoPlayer(props: {
             />
           )}
         </Show>
-        {/* Loading indicator */}
-        <Show when={videoQuery.isLoading}>
-          <div class="absolute inset-0 flex items-center justify-center bg-black/20">
-            <div class="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          </div>
-        </Show>
       </Show>
 
-      {/* Play icon overlay - tap anywhere to open fullscreen */}
+      {/* Download state overlay — loading / error / ready */}
       <Show when={!isPlaying()}>
-        <div class="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
-          <div class="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-            <Play size={28} class="text-gray-900 ml-1" fill="currentColor" />
-          </div>
-        </div>
+        <DownloadOverlay
+          state={!videoQuery.data ? (videoQuery.isError ? 'error' : 'loading') : 'ready'}
+          fileSize={!videoQuery.data && props.media.size ? formatFileSize(props.media.size) : undefined}
+          onRetry={() => videoQuery.refetch()}
+        />
       </Show>
 
       {/* Bottom controls */}

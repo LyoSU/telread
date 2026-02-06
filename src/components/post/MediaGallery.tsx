@@ -1,8 +1,7 @@
 import { For, Show, createSignal, createMemo, onCleanup } from 'solid-js'
 import { Portal } from 'solid-js/web'
 import { useMedia } from '@/lib/query'
-import { VideoModal, Lightbox, type LightboxItem } from '@/components/ui'
-import { Play } from 'lucide-solid'
+import { VideoModal, Lightbox, DownloadOverlay, type LightboxItem } from '@/components/ui'
 import type { MessageMedia } from '@/lib/telegram'
 import { MEDIA, isMobile } from '@/config/constants'
 
@@ -145,6 +144,7 @@ function GalleryItem(props: {
   let observer: IntersectionObserver | undefined
 
   const isAnimation = () => props.item.media.type === 'animation'
+  const isVideo = () => props.item.media.type === 'video'
 
   // Load large thumbnail for inline display
   const mediaQuery = useMedia(
@@ -152,6 +152,14 @@ function GalleryItem(props: {
     () => props.item.messageId,
     () => isAnimation() ? undefined : 'large',
     isVisible
+  )
+
+  // Pre-download full video when visible (so modal opens instantly)
+  const fullVideoQuery = useMedia(
+    () => props.item.channelId,
+    () => props.item.messageId,
+    () => undefined,
+    () => isVisible() && isVideo()
   )
 
   const setupObserver = (el: HTMLDivElement) => {
@@ -176,6 +184,7 @@ function GalleryItem(props: {
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
+      if (isVideo() && !fullVideoQuery.data) return
       props.onClick()
     }
   }
@@ -198,10 +207,13 @@ function GalleryItem(props: {
       role="button"
       tabIndex={0}
       aria-label={`View ${mediaType()} in fullscreen`}
-      class="relative h-[240px] flex-shrink-0 cursor-pointer overflow-hidden rounded-2xl snap-start focus:outline-none focus:ring-2 focus:ring-[var(--accent)] shadow-sm hover:shadow-md transition-shadow"
+      class={`relative h-[240px] flex-shrink-0 overflow-hidden rounded-2xl snap-start focus:outline-none focus:ring-2 focus:ring-[var(--accent)] shadow-sm hover:shadow-md transition-shadow ${
+        isVideo() && !fullVideoQuery.data ? '' : 'cursor-pointer'
+      }`}
       style={{ width: `${240 * aspectRatio()}px`, 'min-width': '160px', 'max-width': '320px' }}
       onClick={(e) => {
         e.stopPropagation()
+        if (isVideo() && !fullVideoQuery.data) return
         props.onClick()
       }}
       onKeyDown={handleKeyDown}
@@ -252,12 +264,13 @@ function GalleryItem(props: {
         )}
       </Show>
 
-      <Show when={props.item.media.type === 'video'}>
-        <div class="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
-          <div class="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center">
-            <Play size={20} class="text-gray-900 ml-0.5" fill="currentColor" />
-          </div>
-        </div>
+      {/* Video download state overlay */}
+      <Show when={isVideo()}>
+        <DownloadOverlay
+          state={!fullVideoQuery.data ? (fullVideoQuery.isError ? 'error' : 'loading') : 'ready'}
+          size="sm"
+          onRetry={() => fullVideoQuery.refetch()}
+        />
       </Show>
     </div>
   )
