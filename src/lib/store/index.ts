@@ -40,5 +40,4 @@ export {
   folderStore,
   setSelectedFolder,
   clearSelectedFolder,
-  setFolderChannelIds,
 } from './folders'

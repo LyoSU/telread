@@ -23,10 +23,19 @@ function Post() {
   const params = useParams()
   const navigate = useNavigate()
 
+  const parsedChannelId = () => {
+    const n = parseInt(params.channelId, 10)
+    return Number.isFinite(n) ? n : 0
+  }
+  const parsedMessageId = () => {
+    const n = parseInt(params.messageId, 10)
+    return Number.isFinite(n) ? n : 0
+  }
+
   // Quick resolve from store first (instant if channel is known)
   const storeChannel = createMemo(() => {
-    if (params.channelId) {
-      return getChannel(parseInt(params.channelId, 10))
+    if (params.channelId && parsedChannelId()) {
+      return getChannel(parsedChannelId())
     }
     if (params.username) {
       return getChannelByUsername(params.username)
@@ -34,24 +43,25 @@ function Post() {
     return undefined
   })
 
-  // Channel ID - prefer store lookup, fallback to query
-  const channelId = createMemo(() => {
-    const fromStore = storeChannel()
-    if (fromStore) return fromStore.id
-    return resolvedChannel.channelId()
-  })
-
   // Only use query as fallback if not in store
   const idOrUsername = createMemo(() => {
-    // If already found in store, don't need to resolve
     if (storeChannel()) return undefined
-    if (params.channelId) return parseInt(params.channelId, 10)
+    if (params.channelId && parsedChannelId()) return parsedChannelId()
     if (params.username) return params.username
     return undefined
   })
 
   const resolvedChannel = useResolveChannel(idOrUsername)
-  const messageId = () => parseInt(params.messageId ?? '0', 10)
+
+  // Channel ID - prefer raw param (instant), then store, then query
+  // For /post/:channelId routes, use param directly to avoid waterfall
+  const channelId = createMemo(() => {
+    if (params.channelId && parsedChannelId()) return parsedChannelId()
+    const fromStore = storeChannel()
+    if (fromStore) return fromStore.id
+    return resolvedChannel.channelId()
+  })
+  const messageId = parsedMessageId
 
   const postQuery = usePost(channelId, messageId)
   const channelInfoQuery = useChannelInfo(channelId)
@@ -128,17 +138,19 @@ function Post() {
     }
   }
 
-  const hasData = () => postQuery.data && channel()
-  // Only show loading if we don't have data AND something is actually loading
-  // If channel is from store, don't wait for resolvedChannel
+  // Show content as soon as post data is available — don't wait for channel
+  const hasPost = () => !!postQuery.data
   const isLoading = () => {
-    if (hasData()) return false
-    // If channel is in store, only check postQuery
-    if (storeChannel()) return postQuery.isLoading
-    // Otherwise check both
+    if (hasPost()) return false
+    if (params.channelId || storeChannel()) return postQuery.isLoading
     return postQuery.isLoading || resolvedChannel.isLoading || resolvedChannel.isFetching
   }
-  const isError = () => !hasData() && (postQuery.isError || (!storeChannel() && resolvedChannel.isError))
+  const isError = () => {
+    if (hasPost()) return false
+    if (postQuery.isError) return true
+    if (!params.channelId && !storeChannel() && resolvedChannel.isError) return true
+    return false
+  }
 
   return (
     <div class="min-h-full pb-24">
@@ -180,7 +192,7 @@ function Post() {
       </Show>
 
       {/* Post content */}
-      <Show when={hasData()}>
+      <Show when={hasPost()}>
         <Motion.article
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -211,18 +223,35 @@ function Post() {
             )}
           </Show>
 
-          {/* Header */}
-          <div class="post-header cursor-pointer" onClick={handleChannelClick}>
-            <ChannelAvatar channelId={channelId()} name={channel()?.title ?? ''} size="md" />
-            <div class="flex-1 min-w-0 overflow-hidden">
-              <p class="font-semibold text-primary hover:underline truncate max-w-full">
-                {channel()?.title}
-              </p>
-              <p class="text-sm text-tertiary">
-                {postQuery.data ? formatDate(postQuery.data.date) : ''}
-              </p>
-            </div>
-          </div>
+          {/* Header - shows skeleton while channel info loads */}
+          <Show
+            when={channel()}
+            fallback={
+              <div class="post-header">
+                <div class="w-10 h-10 rounded-full bg-[var(--glass-bg)] animate-pulse flex-shrink-0" />
+                <div class="flex-1 min-w-0 overflow-hidden">
+                  <div class="h-4 w-24 rounded bg-[var(--glass-bg)] animate-pulse" />
+                  <p class="text-sm text-tertiary mt-1">
+                    {postQuery.data ? formatDate(postQuery.data.date) : ''}
+                  </p>
+                </div>
+              </div>
+            }
+          >
+            {(ch) => (
+              <div class="post-header cursor-pointer" onClick={handleChannelClick}>
+                <ChannelAvatar channelId={channelId()} name={ch().title ?? ''} size="md" />
+                <div class="flex-1 min-w-0 overflow-hidden">
+                  <p class="font-semibold text-primary hover:underline truncate max-w-full">
+                    {ch().title}
+                  </p>
+                  <p class="text-sm text-tertiary">
+                    {postQuery.data ? formatDate(postQuery.data.date) : ''}
+                  </p>
+                </div>
+              </div>
+            )}
+          </Show>
 
           {/* Text content - full, no truncation */}
           <Show when={postQuery.data?.text}>
@@ -262,21 +291,23 @@ function Post() {
           </Show>
 
           {/* Actions */}
-          <div class="post-actions">
-            <PostActions
-              channelId={channelId()}
-              messageId={messageId()}
-              channelTitle={channel()?.title ?? ''}
-              preview={postQuery.data?.text}
-              views={postQuery.data?.views}
-              replies={postQuery.data?.replies}
-              reactions={postQuery.data?.reactions}
-            />
-          </div>
+          <Show when={channelId() !== 0}>
+            <div class="post-actions">
+              <PostActions
+                channelId={channelId()}
+                messageId={messageId()}
+                channelTitle={channel()?.title ?? ''}
+                preview={postQuery.data?.text}
+                views={postQuery.data?.views}
+                replies={postQuery.data?.replies}
+                reactions={postQuery.data?.reactions}
+              />
+            </div>
+          </Show>
         </Motion.article>
 
         {/* Comments section - only if channel has comments enabled */}
-        <Show when={postQuery.data?.replies !== undefined}>
+        <Show when={channelId() !== 0 && postQuery.data?.replies !== undefined}>
           <div class="px-4 pt-4 pb-4">
             <CommentSection
               channelId={channelId()}

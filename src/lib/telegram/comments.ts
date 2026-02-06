@@ -1,6 +1,6 @@
 import { getTelegramClient } from './client'
-import { downloadProfilePhoto } from './media'
 import { MAX_COMMENT_LENGTH } from '@/config/constants'
+import { getTime } from '@/lib/utils'
 import type { Message as TgMessage } from '@mtcute/web'
 import type { MessageMedia, MessageEntity, MessageForward } from './messages'
 import { mapMessage } from './messages'
@@ -44,6 +44,8 @@ export interface CommentThread {
   discussionMessageId?: number
   hasMore: boolean
   nextOffsetId?: number
+  /** Discussion was deleted — commenting is not available */
+  disabled?: boolean
 }
 
 export class CommentError extends Error {
@@ -193,17 +195,18 @@ export async function fetchComments(
 
     return processCommentsResponse(result, messageId, limit)
   } catch (error) {
-    // Use typed error checks from errors.ts
-    if (isMessageNotFound(error) || isChannelInvalid(error)) {
-      throw new CommentError('Post not found or comments disabled', 'NOT_FOUND')
+    // Channel itself is invalid/forbidden — no point trying fallback
+    if (isChannelInvalid(error)) {
+      throw new CommentError('Channel not found or access denied', 'NOT_FOUND')
     }
 
     if (isFloodWait(error)) {
       throw new CommentError(getErrorMessage(error), 'NETWORK')
     }
 
-    // Fallback to getDiscussionMessage + iterHistory
-    return fetchCommentsViaDiscussion(channelId, messageId, limit)
+    // For MSG_ID_INVALID and other errors, try fallback
+    // Pass primaryFailed=true so fallback can mark as disabled if it also finds nothing
+    return fetchCommentsViaDiscussion(channelId, messageId, limit, true)
   }
 }
 
@@ -287,7 +290,8 @@ function processCommentsResponse(
 async function fetchCommentsViaDiscussion(
   channelId: number,
   messageId: number,
-  limit: number
+  limit: number,
+  primaryFailed = false
 ): Promise<CommentThread> {
   const client = getTelegramClient()
 
@@ -298,14 +302,14 @@ async function fetchCommentsViaDiscussion(
     })
 
     if (!discussion) {
-      return createEmptyThread()
+      return { ...createEmptyThread(), disabled: true }
     }
 
     const discussionAny = discussion as TgMessage & { chat?: { id: number }; replies?: { count: number } }
     const chatId = discussionAny.chat?.id
 
     if (!chatId) {
-      return createEmptyThread()
+      return { ...createEmptyThread(), disabled: primaryFailed }
     }
 
     const comments: Comment[] = []
@@ -336,6 +340,11 @@ async function fetchCommentsViaDiscussion(
     const threadedComments = buildCommentTree(comments)
     const totalCount = discussionAny.replies?.count ?? comments.length
 
+    // Primary API failed AND fallback found 0 comments → discussion thread is broken
+    if (primaryFailed && comments.length === 0) {
+      return { ...createEmptyThread(), disabled: true }
+    }
+
     return {
       totalCount,
       comments: threadedComments,
@@ -344,7 +353,11 @@ async function fetchCommentsViaDiscussion(
       hasMore: comments.length >= limit,
       nextOffsetId: comments.length > 0 ? comments[comments.length - 1].id : undefined,
     }
-  } catch {
+  } catch (error) {
+    // Discussion thread deleted or inaccessible — show disabled state, not error
+    if (isMessageNotFound(error) || isChannelInvalid(error)) {
+      return { ...createEmptyThread(), disabled: true }
+    }
     throw new CommentError('Failed to load comments', 'NETWORK')
   }
 }
@@ -426,30 +439,6 @@ export async function sendComment(
     }
 
     throw new CommentError('Failed to send comment', 'UNKNOWN')
-  }
-}
-
-// ============================================================================
-// Check Comments Enabled
-// ============================================================================
-
-/**
- * Check if a channel post has comments enabled
- */
-export async function hasCommentsEnabled(
-  channelId: number,
-  messageId: number
-): Promise<boolean> {
-  const client = getTelegramClient()
-
-  try {
-    const discussion = await client.getDiscussionMessage({
-      chatId: channelId,
-      message: messageId,
-    })
-    return discussion !== null
-  } catch {
-    return false
   }
 }
 
@@ -881,15 +870,6 @@ function resolveAuthor(
 }
 
 /**
- * Load author profile photo
- * Call this when rendering comment to get the actual photo URL
- */
-export async function loadAuthorPhoto(authorId: number): Promise<string | null> {
-  if (!authorId) return null
-  return downloadProfilePhoto(authorId, 'small')
-}
-
-/**
  * Map TL reactions to CommentReaction array
  */
 function mapReactions(
@@ -941,11 +921,11 @@ function buildCommentTree(comments: Comment[]): Comment[] {
   }
 
   // Sort: root comments newest first, replies oldest first (chronological)
-  rootComments.sort((a, b) => b.date.getTime() - a.date.getTime())
+  rootComments.sort((a, b) => getTime(b.date) - getTime(a.date))
 
   const sortRepliesRecursive = (comment: Comment) => {
     if (comment.replies && comment.replies.length > 0) {
-      comment.replies.sort((a, b) => a.date.getTime() - b.date.getTime())
+      comment.replies.sort((a, b) => getTime(a.date) - getTime(b.date))
       comment.replies.forEach(sortRepliesRecursive)
     }
   }

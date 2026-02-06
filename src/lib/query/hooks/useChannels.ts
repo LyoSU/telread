@@ -3,7 +3,6 @@ import { createMemo } from 'solid-js'
 import {
   fetchChannels,
   joinChannel,
-  leaveChannel,
   getChannel,
   getChannelFullInfo,
   type Channel,
@@ -72,23 +71,6 @@ export function useJoinChannel() {
           old ? [channel, ...old] : [channel]
         )
       }
-    },
-  }))
-}
-
-/**
- * Hook to leave a channel
- */
-export function useLeaveChannel() {
-  const queryClient = useQueryClient()
-
-  return createMutation(() => ({
-    mutationFn: (channelId: number) => leaveChannel(channelId),
-    onSuccess: (_, channelId) => {
-      // Remove from channels list
-      queryClient.setQueryData<Channel[]>(queryKeys.channels.list(), (old) =>
-        old ? old.filter((c) => c.id !== channelId) : []
-      )
     },
   }))
 }

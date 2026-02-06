@@ -12,16 +12,23 @@ import { MainLayout } from '@/layouts'
 import { FullPageError, UpdatePrompt } from '@/components/ui'
 import { MessageCircle } from 'lucide-solid'
 
-// Import Home directly (most used page), lazy load others
+// Import most-used pages directly, lazy load the rest
 import Home from '@/pages/Home'
+import Post from '@/pages/Post'
 
 // Lazy load page components for code splitting
 const Login = lazy(() => import('@/pages/Login'))
 const Channel = lazy(() => import('@/pages/Channel'))
 const Channels = lazy(() => import('@/pages/Channels'))
-const Post = lazy(() => import('@/pages/Post'))
 const Bookmarks = lazy(() => import('@/pages/Bookmarks'))
 const Settings = lazy(() => import('@/pages/Settings'))
+
+// Preload Channel chunk after auth (next most visited after Post)
+function preloadRoutes(): void {
+  setTimeout(() => {
+    import('@/pages/Channel')
+  }, 1000)
+}
 
 /**
  * Route loading fallback - minimal skeleton
@@ -112,9 +119,7 @@ function ChannelByUsernamePage() {
 function PostPage() {
   return (
     <ProtectedRoute>
-      <Suspense fallback={<RouteFallback />}>
-        <Post />
-      </Suspense>
+      <Post />
     </ProtectedRoute>
   )
 }
@@ -122,9 +127,7 @@ function PostPage() {
 function PostByUsernamePage() {
   return (
     <ProtectedRoute>
-      <Suspense fallback={<RouteFallback />}>
-        <Post />
-      </Suspense>
+      <Post />
     </ProtectedRoute>
   )
 }
@@ -181,6 +184,9 @@ export function App() {
         authStore.setUser(user)
         // Mark client as ready for API calls (media downloads, etc.)
         setClientReady(true)
+
+        // Preload Post/Channel chunks so first navigation is instant
+        preloadRoutes()
 
         // IMPORTANT: Register handlers BEFORE starting updates loop
         // This ensures we don't miss any updates that arrive immediately

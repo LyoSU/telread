@@ -66,11 +66,6 @@ function processBatch(): void {
   pendingBatch.messages = []
 
   if (messages.length === 0) {
-    // Even if batch is empty, try to process any pending messages
-    // that were queued before store was ready
-    if (isStoreReady() && pendingMessages.length > 0) {
-      processPendingMessages()
-    }
     return
   }
 
@@ -152,10 +147,6 @@ function processBatch(): void {
     upsertPost(post) // Individual call for pendingKeys behavior
   }
 
-  // Also process any pending messages that were queued before store was ready
-  if (pendingMessages.length > 0) {
-    processPendingMessages()
-  }
 }
 
 function queueMessage(message: TgMessage): void {
@@ -221,31 +212,16 @@ function stopVisibilityListener(): void {
 function processPendingMessages(): void {
   if (pendingMessages.length === 0) return
 
-  const messages = [...pendingMessages]
-  pendingMessages.length = 0 // Clear queue
-
-  // Filter to channel messages and map
-  const mapped: Message[] = []
-  for (const message of messages) {
-    const peer = message.chat
-    const chatId = peer?.id
-    if (!chatId) continue
-
-    // Only process channel messages
-    if (peer.type !== 'chat') continue
-    const chat = peer as Chat
-    if (chat.chatType !== 'channel') continue
-
-    const post = mapMessage(message, chatId)
-    if (post) mapped.push(post)
+  if (import.meta.env.DEV) {
+    console.log(`[Updates] Processing ${pendingMessages.length} pending messages`)
   }
 
-  if (mapped.length === 0) return
+  // Move pending messages to the batch for unified processing
+  pendingBatch.messages.push(...pendingMessages)
+  pendingMessages.length = 0
 
-  // Add to pending (these are real-time updates that arrived before store was ready)
-  for (const post of mapped) {
-    upsertPost(post) // Individual call for pendingKeys behavior
-  }
+  // Process immediately (don't schedule — these are already delayed)
+  processBatch()
 }
 
 /**

@@ -11,8 +11,6 @@ interface CommentItemProps {
   discussionChatId?: number
   onReply?: (commentId: number) => void
   isReplying?: boolean
-  /** Show thread line below avatar */
-  showThreadLine?: boolean
   /** Context for showing/expanding replies */
   repliesContext?: CommentActionsContext
 }
@@ -26,17 +24,13 @@ interface CommentItemProps {
 export function CommentItem(props: CommentItemProps) {
   return (
     <div class="flex gap-3">
-      {/* Avatar column with thread line */}
-      <div class="flex flex-col items-center flex-shrink-0">
+      {/* Avatar */}
+      <div class="flex-shrink-0 pt-0.5">
         <UserAvatar
           userId={props.comment.author.id}
           name={props.comment.author.name}
           size="sm"
         />
-        {/* Thread line connecting to next comment */}
-        <Show when={props.showThreadLine}>
-          <div class="w-0.5 flex-1 bg-[var(--nav-border)] mt-2 rounded-full opacity-60" />
-        </Show>
       </div>
 
       {/* Content */}
@@ -140,7 +134,7 @@ export function CommentItem(props: CommentItemProps) {
             Reply
           </button>
 
-          {/* View replies button - inline with Reply */}
+          {/* View/hide replies button - inline with Reply */}
           <Show when={props.repliesContext}>
             {(ctx) => (
               <button
@@ -148,9 +142,14 @@ export function CommentItem(props: CommentItemProps) {
                 onClick={() => ctx().onShowReplies()}
                 class="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-accent active:opacity-70 transition-opacity duration-150"
               >
-                <ChevronDown size={14} />
+                <ChevronDown
+                  size={14}
+                  style={ctx().showReplies ? { transform: 'rotate(180deg)', transition: 'transform 0.2s' } : { transition: 'transform 0.2s' }}
+                />
                 <span>
-                  {ctx().replyCount} {ctx().replyCount === 1 ? 'reply' : 'replies'}
+                  {ctx().showReplies
+                    ? 'Hide replies'
+                    : `${ctx().replyCount} ${ctx().replyCount === 1 ? 'reply' : 'replies'}`}
                 </span>
               </button>
             )}

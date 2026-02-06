@@ -110,39 +110,6 @@ export function useMessages(channelId: () => number, enabled?: () => boolean) {
 }
 
 /**
- * Hook for infinite scrolling messages from a channel
- */
-export function useInfiniteMessages(channelId: () => number) {
-  const query = createInfiniteQuery(() => ({
-    queryKey: queryKeys.messages.infinite(channelId()),
-    queryFn: async ({ pageParam }) => {
-      const messages = await fetchMessages(channelId(), {
-        limit: 20,
-        offsetId: pageParam,
-      })
-      upsertPosts(messages)
-      return messages
-    },
-    initialPageParam: undefined as number | undefined,
-    getNextPageParam: (lastPage) => {
-      if (lastPage.length < 20) return undefined
-      return lastPage[lastPage.length - 1]?.id
-    },
-    enabled: channelId() !== 0,
-    staleTime: TIMING.QUERY_STALE_TIME,
-  }))
-
-  // Sync cached pages to postsState
-  createEffect(
-    on(() => query.data?.pages, (pages) => {
-      if (pages?.length) upsertPosts(pages.flat())
-    }, { defer: false })
-  )
-
-  return query
-}
-
-/**
  * Timeline data structure - channels and grouped posts
  * Note: channelMap is derived in useOptimizedTimeline via createMemo
  */
@@ -206,6 +173,27 @@ async function fetchTimelineHistory(
 
   const sorted = allMessages.sort((a, b) => getTime(b.date) - getTime(a.date))
   return sliceWithCompleteGroups(sorted, limit)
+}
+
+/** Shared filtering logic for timeline and pending count memos */
+function filterPostsByContext(
+  keys: string[],
+  byId: Record<string, Message>,
+  archivedIds: Set<number> | null,
+  folderChannelIds: number[] | null,
+): Message[] {
+  let posts = keys.map((key) => byId[key]).filter(Boolean) as Message[]
+
+  if (archivedIds) {
+    posts = posts.filter(post => !archivedIds.has(post.channelId))
+  }
+
+  if (folderChannelIds && folderChannelIds.length > 0) {
+    const allowedChannelIds = new Set(folderChannelIds)
+    posts = posts.filter(post => allowedChannelIds.has(post.channelId))
+  }
+
+  return posts
 }
 
 /**
@@ -418,18 +406,11 @@ export function useOptimizedTimeline() {
     const archivedIds = hideArchived ? getArchivedChannelIds() : null
 
     return untrack(() => { // UNTRACKED - byId content changes won't trigger recomputation
-      let posts = keys.map((key) => postsState.byId[key]).filter(Boolean) as Message[]
-
-      // Filter out posts from archived channels when hideArchived=true
-      if (archivedIds) {
-        posts = posts.filter(post => !archivedIds.has(post.channelId))
-      }
-
-      // Filter by folder if one is selected
-      if (folderId !== null && folderChannelIds.length > 0) {
-        const allowedChannelIds = new Set(folderChannelIds)
-        posts = posts.filter(post => allowedChannelIds.has(post.channelId))
-      }
+      const posts = filterPostsByContext(
+        keys, postsState.byId,
+        archivedIds,
+        folderId !== null ? folderChannelIds : null
+      )
 
       // Group posts by groupedId for albums
       const items = groupPostsByMediaGroup(posts)
@@ -483,19 +464,11 @@ export function useOptimizedTimeline() {
     const archivedIds = hideArchived ? getArchivedChannelIds() : null
 
     return untrack(() => {
-      let posts = keys.map((key) => postsState.byId[key]).filter(Boolean) as Message[]
-
-      // Filter out posts from archived channels when hideArchived=true
-      if (archivedIds) {
-        posts = posts.filter(post => !archivedIds.has(post.channelId))
-      }
-
-      // Filter by folder if one is selected
-      if (folderId !== null && folderChannelIds.length > 0) {
-        const allowedChannelIds = new Set(folderChannelIds)
-        posts = posts.filter(post => allowedChannelIds.has(post.channelId))
-      }
-
+      const posts = filterPostsByContext(
+        keys, postsState.byId,
+        archivedIds,
+        folderId !== null ? folderChannelIds : null
+      )
       return groupPostsByMediaGroup(posts).length
     })
   })

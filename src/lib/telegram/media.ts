@@ -248,25 +248,8 @@ const PROFILE_CACHE_PREFIX = 'profile-photo:'
 const PROFILE_CACHE_VERSION = 2 // v2: binary data instead of base64
 const PROFILE_CACHE_TTL = 1000 * 60 * 60 * 24 * 7 // 7 days
 
-// Simple cache for profile photo blob URLs with soft limit
-// We don't aggressively revoke URLs because Avatar components may still reference them
-// Instead, we just evict oldest entries when cache gets too large
-// On page reload, this Map is cleared anyway
 const MAX_PROFILE_PHOTO_CACHE = 200
-const profilePhotoCache = new Map<string, string>()
-
-function addToProfilePhotoCache(key: string, url: string): void {
-  // Soft eviction when cache is too large - remove oldest 20%
-  // Don't revoke blob URLs — TanStack Query may still hold references.
-  if (profilePhotoCache.size >= MAX_PROFILE_PHOTO_CACHE) {
-    const toRemove = Math.floor(MAX_PROFILE_PHOTO_CACHE * 0.2)
-    const keys = Array.from(profilePhotoCache.keys()).slice(0, toRemove)
-    for (const k of keys) {
-      profilePhotoCache.delete(k)
-    }
-  }
-  profilePhotoCache.set(key, url)
-}
+const profileCache = new MediaLRUCache(MAX_PROFILE_PHOTO_CACHE)
 
 interface CachedProfilePhoto {
   data: Uint8Array // Binary data
@@ -284,7 +267,7 @@ async function getCachedProfilePhoto(peerId: number, size: string): Promise<stri
   const cacheKey = `profile:${peerId}:${size}`
 
   // Check memory cache first to avoid creating duplicate blob URLs
-  const memCached = profilePhotoCache.get(cacheKey)
+  const memCached = profileCache.get(cacheKey)
   if (memCached) return memCached
 
   try {
@@ -298,13 +281,13 @@ async function getCachedProfilePhoto(peerId: number, size: string): Promise<stri
     if (Date.now() - cached.timestamp > PROFILE_CACHE_TTL) return null
 
     // Check memory cache again (another request might have populated it)
-    const memCachedAgain = profilePhotoCache.get(cacheKey)
+    const memCachedAgain = profileCache.get(cacheKey)
     if (memCachedAgain) return memCachedAgain
 
     // Create blob URL and store in memory cache
     const blob = new Blob([cached.data], { type: 'image/jpeg' })
     const url = URL.createObjectURL(blob)
-    addToProfilePhotoCache(cacheKey, url)
+    profileCache.set(cacheKey, url)
     return url
   } catch {
     return null
@@ -410,15 +393,6 @@ function createPriorityQueue(maxConcurrent: number) {
         active--
       }
     },
-    // Boost priority of an item if it becomes visible
-    boostPriority(predicate: (item: QueueItem) => boolean): void {
-      for (const item of queue) {
-        if (predicate(item) && item.priority !== 'high') {
-          item.priority = 'high'
-        }
-      }
-      sortQueue()
-    },
     get pending() {
       return queue.length
     },
@@ -446,6 +420,43 @@ function debugWarn(message: string, ...args: unknown[]) {
   if (import.meta.env.DEV) {
     console.warn(`[Media] ${message}`, ...args)
   }
+}
+
+// ============================================================================
+// Download Helpers
+// ============================================================================
+
+/**
+ * Extract downloadable media from a message, handling webpage preview photos
+ */
+function extractMediaFromMessage(msg: { media: { type: string } & Record<string, unknown> }): MediaWithThumbnails | null {
+  if (msg.media.type === 'webpage') {
+    const photo = (msg.media as WebPageMedia).preview.photo
+    return photo ?? null
+  }
+  return msg.media as MediaWithThumbnails
+}
+
+/**
+ * Download buffer from a media object, with thumbnail fallback chain
+ */
+async function downloadFromMediaObject(
+  media: MediaWithThumbnails,
+  thumbType: string | undefined,
+  client: ReturnType<typeof getTelegramClient>,
+  label: string
+): Promise<Uint8Array | null> {
+  if (thumbType && 'getThumbnail' in media && typeof media.getThumbnail === 'function') {
+    const thumbnail = media.getThumbnail(thumbType)
+      ?? media.getThumbnail('m')
+      ?? media.getThumbnail('s')
+      ?? media.getThumbnail('x')
+
+    if (thumbnail) {
+      return await withTimeout(client.downloadAsBuffer(thumbnail), DOWNLOAD_TIMEOUT, `thumb-${label}`)
+    }
+  }
+  return await withTimeout(client.downloadAsBuffer(media), DOWNLOAD_TIMEOUT, label)
 }
 
 // ============================================================================
@@ -549,46 +560,13 @@ export async function downloadMedia(
       ? thumbSize === 'small' ? 's' : thumbSize === 'medium' ? 'm' : 'x'
       : undefined
 
+    const label = `media(${channelId}, ${messageId})`
+
     try {
-      // For webpage, extract photo from preview
-      let media: MediaWithThumbnails
-      if (mediaType === 'webpage') {
-        const photo = (msg.media as WebPageMedia).preview.photo
-        if (!photo) return null
-        media = photo
-      } else {
-        media = msg.media as MediaWithThumbnails
-      }
+      const media = extractMediaFromMessage(msg)
+      if (!media) return null
 
-      if (thumbType && 'getThumbnail' in media && typeof media.getThumbnail === 'function') {
-        // For photos/videos/documents with thumbnails, get the thumbnail first
-        const thumbnail = media.getThumbnail(thumbType)
-          ?? media.getThumbnail('m')  // fallback to medium
-          ?? media.getThumbnail('s')  // fallback to small
-          ?? media.getThumbnail('x')  // fallback to large
-
-        if (thumbnail) {
-          buffer = await withTimeout(
-            client.downloadAsBuffer(thumbnail),
-            DOWNLOAD_TIMEOUT,
-            `downloadThumbnail(${channelId}, ${messageId})`
-          )
-        } else {
-          // No thumbnail found - download full media
-          buffer = await withTimeout(
-            client.downloadAsBuffer(media),
-            DOWNLOAD_TIMEOUT,
-            `downloadMedia(${channelId}, ${messageId})`
-          )
-        }
-      } else {
-        // Download full media (no getThumbnail method or no thumb requested)
-        buffer = await withTimeout(
-          client.downloadAsBuffer(media),
-          DOWNLOAD_TIMEOUT,
-          `downloadMedia(${channelId}, ${messageId})`
-        )
-      }
+      buffer = await downloadFromMediaObject(media, thumbType, client, label)
     } catch (downloadError) {
       if (signal?.aborted) {
         return null
@@ -599,7 +577,6 @@ export async function downloadMedia(
         debugWarn(`File reference expired, refetching: channel=${channelId}, msg=${messageId}`)
 
         try {
-          // Refetch message to get fresh file reference
           const freshMessages = await withTimeout(
             client.getMessages(channelId, [messageId]),
             DOWNLOAD_TIMEOUT,
@@ -611,29 +588,9 @@ export async function downloadMedia(
           }
 
           if (freshMessages?.[0]?.media) {
-            // Extract media (handle webpage separately)
-            let freshMedia: MediaWithThumbnails
-            if (freshMessages[0].media.type === 'webpage') {
-              const photo = (freshMessages[0].media as WebPageMedia).preview.photo
-              if (!photo) throw new Error('No photo in webpage')
-              freshMedia = photo
-            } else {
-              freshMedia = freshMessages[0].media as MediaWithThumbnails
-            }
-
-            if (thumbType && 'getThumbnail' in freshMedia && typeof freshMedia.getThumbnail === 'function') {
-              const thumbnail = freshMedia.getThumbnail(thumbType)
-                ?? freshMedia.getThumbnail('m')
-                ?? freshMedia.getThumbnail('s')
-                ?? freshMedia.getThumbnail('x')
-
-              if (thumbnail) {
-                buffer = await withTimeout(client.downloadAsBuffer(thumbnail), DOWNLOAD_TIMEOUT, 'retry-thumb')
-              } else {
-                buffer = await withTimeout(client.downloadAsBuffer(freshMedia), DOWNLOAD_TIMEOUT, 'retry-media')
-              }
-            } else {
-              buffer = await withTimeout(client.downloadAsBuffer(freshMedia), DOWNLOAD_TIMEOUT, 'retry-media')
+            const freshMedia = extractMediaFromMessage(freshMessages[0])
+            if (freshMedia) {
+              buffer = await downloadFromMediaObject(freshMedia, thumbType, client, `retry-${label}`)
             }
           }
         } catch (retryError) {
@@ -716,7 +673,7 @@ export async function downloadProfilePhoto(
   const cacheKey = `profile:${peerId}:${size}`
 
   // Check in-memory cache first (non-evicting, blob URLs stay valid)
-  const memCached = profilePhotoCache.get(cacheKey)
+  const memCached = profileCache.get(cacheKey)
   if (memCached) {
     return memCached
   }
@@ -793,7 +750,7 @@ async function downloadProfilePhotoInner(
     const url = URL.createObjectURL(blob)
 
     // Store in memory cache with soft eviction
-    addToProfilePhotoCache(cacheKey, url)
+    profileCache.set(cacheKey, url)
     return url
   } catch (error) {
     // Handle FLOOD_WAIT - throw to allow React Query to handle retry with backoff
@@ -856,16 +813,6 @@ async function resolvePeerWithPhoto(
 // ============================================================================
 
 /**
- * Stream video media
- */
-export async function getVideoStreamUrl(
-  channelId: number,
-  messageId: number
-): Promise<string | null> {
-  return downloadMedia(channelId, messageId)
-}
-
-/**
  * Preload media thumbnails for a batch of messages
  * Uses low priority to not block visible media downloads
  */
@@ -885,39 +832,9 @@ export async function preloadThumbnails(
  */
 export function clearMediaCache(): void {
   mediaCache.clear()
-
-  // Revoke profile photo blob URLs and clear cache
-  for (const url of profilePhotoCache.values()) {
-    URL.revokeObjectURL(url)
-  }
-  profilePhotoCache.clear()
+  profileCache.clear()
 
   debugLog('Media cache cleared')
-}
-
-/**
- * Remove a specific media entry from cache
- * Useful for cleanup when component unmounts
- */
-export function removeFromMediaCache(
-  channelId: number,
-  messageId: number,
-  thumbSize?: 'small' | 'medium' | 'large'
-): void {
-  const cacheKey = `${channelId}:${messageId}:${thumbSize ?? 'full'}`
-  mediaCache.delete(cacheKey)
-}
-
-/**
- * Get cached media URL if available
- */
-export function getCachedMedia(
-  channelId: number,
-  messageId: number,
-  thumbSize?: 'small' | 'medium' | 'large'
-): string | null {
-  const cacheKey = `${channelId}:${messageId}:${thumbSize ?? 'full'}`
-  return mediaCache.get(cacheKey) ?? null
 }
 
 function getMimeType(media: { type: string; mimeType?: string }): string {
@@ -954,7 +871,7 @@ let cleanupInProgress = false
  * Uses batched processing to avoid blocking the main thread
  * Runs automatically, at most once per hour
  */
-export async function cleanupExpiredCache(): Promise<{ deleted: number }> {
+async function cleanupExpiredCache(): Promise<{ deleted: number }> {
   const now = Date.now()
 
   // Throttle cleanup to run at most once per hour

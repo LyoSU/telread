@@ -7,12 +7,7 @@ export {
   isAuthenticated,
   getCurrentUser,
   logout,
-  resetClient,
-  setLogLevel,
-  getLogLevel,
   LogLevel,
-  getIsOnline,
-  onNetworkOnline,
   type LogLevelType,
 } from './client'
 export {
@@ -76,8 +71,6 @@ export {
 export {
   fetchComments,
   sendComment,
-  hasCommentsEnabled,
-  loadAuthorPhoto,
   CommentError,
   type Comment,
   type CommentAuthor,
@@ -88,12 +81,8 @@ export {
 export {
   downloadMedia,
   downloadProfilePhoto,
-  getVideoStreamUrl,
   preloadThumbnails,
   clearMediaCache,
-  getCachedMedia,
-  removeFromMediaCache,
-  cleanupExpiredCache,
   type MediaPriority,
 } from './media'
 // MTProto error handling utilities
@@ -134,14 +123,10 @@ export {
   closeChannel,
   closeAllChannels,
   updateOpenChannels,
-  getOpenChannels,
-  isChannelOpen,
-  getOpenChatsStats,
 } from './openChats'
 export {
   subscribeToComments,
   onCommentUpdate,
-  getActiveSubscriptionCount,
   type CommentSubscription,
   type CommentUpdate,
   type CommentUpdateCallback,

@@ -3,7 +3,7 @@ import { CommentThread } from './CommentThread'
 import { CommentComposer } from './CommentComposer'
 import { CommentSkeleton, ErrorState } from '@/components/ui'
 import { useComments, useSendComment } from '@/lib/query'
-import { MessageCircle } from 'lucide-solid'
+import { MessageCircle, MessageCircleOff } from 'lucide-solid'
 
 interface CommentSectionProps {
   channelId: number
@@ -32,22 +32,29 @@ export function CommentSection(props: CommentSectionProps) {
   }
 
   const totalComments = () => commentsQuery.data?.totalCount ?? 0
+  const isDisabled = () => commentsQuery.data?.disabled === true
 
   return (
     <div class="space-y-4">
       {/* Header with comment count */}
       <div class="flex items-center gap-2 text-sm text-secondary">
-        <MessageCircle size={20} />
+        <Show when={!isDisabled()} fallback={<MessageCircleOff size={20} />}>
+          <MessageCircle size={20} />
+        </Show>
         <span class="font-medium">
-          {totalComments()} {totalComments() === 1 ? 'comment' : 'comments'}
+          <Show when={!isDisabled()} fallback="Comments unavailable">
+            {totalComments()} {totalComments() === 1 ? 'comment' : 'comments'}
+          </Show>
         </span>
       </div>
 
-      {/* Comment composer */}
-      <CommentComposer
-        onSubmit={(text) => handleSendComment(text)}
-        isSending={sendMutation.isPending}
-      />
+      {/* Comment composer - hidden when discussion is deleted */}
+      <Show when={!isDisabled()}>
+        <CommentComposer
+          onSubmit={(text) => handleSendComment(text)}
+          isSending={sendMutation.isPending}
+        />
+      </Show>
 
       {/* Loading state */}
       <Show when={commentsQuery.isLoading}>
@@ -72,8 +79,18 @@ export function CommentSection(props: CommentSectionProps) {
         />
       </Show>
 
-      {/* Empty state */}
-      <Show when={!commentsQuery.isLoading && !commentsQuery.isError && totalComments() === 0}>
+      {/* Discussion deleted state */}
+      <Show when={isDisabled()}>
+        <ErrorState
+          variant="empty"
+          title="Comments unavailable"
+          description="The discussion for this post was deleted."
+          compact
+        />
+      </Show>
+
+      {/* Empty state - only when discussion exists but no comments */}
+      <Show when={!commentsQuery.isLoading && !commentsQuery.isError && !isDisabled() && totalComments() === 0}>
         <ErrorState
           variant="empty"
           title="No comments yet"

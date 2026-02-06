@@ -4,7 +4,7 @@ import { GlassCard, GlassButton, UserAvatar, ConfirmDialog, Toggle } from '@/com
 import { themeStore, authStore, updateStore, preferencesStore, clearPosts, type Theme } from '@/lib/store'
 import { logout, clearMediaCache } from '@/lib/telegram'
 import { queryClient, queryKeys } from '@/lib/query'
-import { clearAllIndexedDBCaches } from '@/lib/cache/registry'
+import { keys, del } from 'idb-keyval'
 import { Send, ChevronRight, RefreshCw, Check, FolderOpen, Archive, Trash2 } from 'lucide-solid'
 
 /**
@@ -201,8 +201,16 @@ function Settings() {
             {/* Clear cache */}
             <button
               onClick={async () => {
-                // Clear all IndexedDB caches (query cache + media caches)
-                await clearAllIndexedDBCaches()
+                // Clear IndexedDB caches (query cache + media) but keep user settings
+                const allKeys = await keys()
+                const cacheKeys = allKeys.filter((k): k is string =>
+                  typeof k === 'string' && (
+                    k === 'telread-query-cache' ||
+                    k.startsWith('media-thumb:') ||
+                    k.startsWith('profile-photo:')
+                  )
+                )
+                await Promise.all(cacheKeys.map(k => del(k)))
                 // Clear in-memory media caches and revoke blob URLs
                 clearMediaCache()
                 // Clear query client

@@ -76,20 +76,6 @@ export function onCommentUpdate(callback: CommentUpdateCallback): () => void {
   }
 }
 
-/**
- * Check if a discussion chat is subscribed
- */
-export function isSubscribed(discussionChatId: number): boolean {
-  return activeSubscriptions.has(discussionChatId)
-}
-
-/**
- * Get subscription info for a discussion chat
- */
-export function getSubscription(discussionChatId: number): CommentSubscription | undefined {
-  return activeSubscriptions.get(discussionChatId)
-}
-
 // ============================================================================
 // Message Processing (called from updates.ts)
 // ============================================================================
@@ -264,10 +250,3 @@ function mapMessageToComment(message: TgMessage): Comment | null {
   }
 }
 
-// ============================================================================
-// Exports
-// ============================================================================
-
-export function getActiveSubscriptionCount(): number {
-  return activeSubscriptions.size
-}

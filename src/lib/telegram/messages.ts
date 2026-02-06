@@ -1,4 +1,4 @@
-import { getTelegramClient } from './client'
+import { getTelegramClient, onClientReset } from './client'
 import type {
   Message as TgMessage,
   Photo,
@@ -779,6 +779,7 @@ function mapEntities(msg: TgMessage): MessageEntity[] | undefined {
 
 // Cache for global available reactions
 let cachedGlobalReactions: string[] | null = null
+onClientReset(() => { cachedGlobalReactions = null })
 
 /**
  * Send a reaction to a message using mtcute's built-in method

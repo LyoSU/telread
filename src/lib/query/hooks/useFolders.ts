@@ -1,5 +1,4 @@
 import { createQuery } from '@tanstack/solid-query'
-import { createMemo } from 'solid-js'
 import { fetchDialogFilters, getFolderInfoList, type FolderInfo } from '@/lib/telegram'
 import { queryKeys } from '../keys'
 
@@ -52,18 +51,3 @@ export function useFolderInfoList(channelIds: () => number[]) {
     }))
 }
 
-/**
- * Hook to get a specific folder by ID
- *
- * @param folderId - Accessor returning the folder ID to get
- * @returns Memo with the folder data or undefined
- */
-export function useFolder(folderId: () => number | null) {
-    const foldersQuery = useFolders()
-
-    return createMemo(() => {
-        const id = folderId()
-        if (id === null) return null
-        return foldersQuery.data?.find(f => f.id === id)
-    })
-}

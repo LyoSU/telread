@@ -199,27 +199,3 @@ export async function updateOpenChannels(
   }
 }
 
-/**
- * Get the set of currently open channel IDs
- */
-export function getOpenChannels(): ReadonlySet<number> {
-  return openChannels
-}
-
-/**
- * Check if a specific channel is open
- */
-export function isChannelOpen(channelId: number): boolean {
-  return openChannels.has(channelId)
-}
-
-/**
- * Get statistics about open chats
- */
-export function getOpenChatsStats(): { open: number; max: number; isActive: boolean } {
-  return {
-    open: openChannels.size,
-    max: MAX_OPEN_CHATS,
-    isActive,
-  }
-}

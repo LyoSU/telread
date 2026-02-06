@@ -72,12 +72,4 @@ export function clearSelectedFolder() {
     setSelectedFolder(null, [])
 }
 
-/**
- * Update the channel IDs for the current folder
- * Used when folder channels are loaded asynchronously
- */
-export function setFolderChannelIds(channelIds: number[]) {
-    setFolderStore('channelIdsInFolder', channelIds)
-}
-
 export { folderStore }
