@@ -25,17 +25,12 @@ export function MainLayout(props: ParentProps) {
   const location = useLocation()
   let mainRef: HTMLElement | undefined
 
-  const handleHomeClick = (e: MouseEvent) => {
+  const handleHomeClick = () => {
     haptic('light')
-    if (location.pathname === '/') {
-      e.preventDefault()
-      if (mainRef && mainRef.scrollTop > 0) {
-        // Scroll to top smoothly
-        mainRef.scrollTo({ top: 0, behavior: 'smooth' })
-      } else {
-        // Already at top - show new posts or refresh
-        window.dispatchEvent(new CustomEvent('home-tap-top'))
-      }
+    if (mainRef && mainRef.scrollTop > 0) {
+      mainRef.scrollTo({ top: 0, behavior: 'smooth' })
+    } else {
+      window.dispatchEvent(new CustomEvent('home-tap-top'))
     }
   }
 
@@ -93,16 +88,33 @@ export function MainLayout(props: ParentProps) {
 
         {/* Navigation */}
         <nav class="flex-1 flex flex-col items-center justify-center gap-2">
-          {navItems.map((item) => (
-            <A
-              href={item.path}
-              class={`threads-nav-item ${isActive(item.path) ? 'threads-nav-item-active' : ''}`}
-              title={item.label}
-              onClick={item.path === '/' ? handleHomeClick : undefined}
-            >
-              {item.icon(isActive(item.path))}
-            </A>
-          ))}
+          {navItems.map((item) => {
+            const active = () => isActive(item.path)
+            return (
+              <Show
+                when={item.path === '/' && active()}
+                fallback={
+                  <A
+                    href={item.path}
+                    class={`threads-nav-item ${active() ? 'threads-nav-item-active' : ''}`}
+                    title={item.label}
+                    onClick={handleNavClick}
+                  >
+                    {item.icon(active())}
+                  </A>
+                }
+              >
+                <button
+                  type="button"
+                  class="threads-nav-item threads-nav-item-active"
+                  title={item.label}
+                  onClick={handleHomeClick}
+                >
+                  {item.icon(true)}
+                </button>
+              </Show>
+            )
+          })}
         </nav>
 
         {/* Bottom spacer */}
@@ -133,13 +145,18 @@ export function MainLayout(props: ParentProps) {
 
         {/* Center: Nav items (Home, Bookmarks) */}
         <nav class="floating-pill">
-          <A
-            href="/"
-            class={`nav-item ${isActive('/') ? 'nav-item-active' : ''}`}
-            onClick={handleHomeClick}
+          <Show
+            when={isActive('/')}
+            fallback={
+              <A href="/" class="nav-item" onClick={handleNavClick}>
+                <Home size={28} stroke-width={1.5} />
+              </A>
+            }
           >
-            <Home size={28} stroke-width={isActive('/') ? 2.5 : 1.5} />
-          </A>
+            <button type="button" class="nav-item nav-item-active" onClick={handleHomeClick}>
+              <Home size={28} stroke-width={2.5} />
+            </button>
+          </Show>
           <A
             href="/bookmarks"
             class={`nav-item ${isActive('/bookmarks') ? 'nav-item-active' : ''}`}

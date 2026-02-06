@@ -267,6 +267,10 @@ function Home() {
                 pendingCount={timeline.pendingCount}
                 onShowNewPosts={timeline.showNewPosts}
                 scrollKey="home"
+                onRefresh={async () => {
+                    if (timeline.pendingCount > 0) timeline.showNewPosts()
+                    await timeline.refresh()
+                }}
             />
         </div>
     )

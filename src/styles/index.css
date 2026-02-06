@@ -963,12 +963,11 @@
 
 .page-transition {
   transition: opacity 0.15s ease-out, transform 0.15s ease-out;
-  will-change: opacity, transform;
 }
 
 .page-visible {
   opacity: 1;
-  transform: translateY(0);
+  /* No transform — avoids containing block that breaks fixed descendants */
 }
 
 .page-hidden {
@@ -1144,27 +1143,42 @@
    MOBILE: Reduce GPU-heavy effects
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
+  /* Disable all backdrop-filter on mobile — GPU overdraw kills scroll performance.
+     Use solid backgrounds instead. Glass effects are a desktop luxury. */
   .floating-glass {
-    -webkit-backdrop-filter: blur(16px) saturate(120%);
-    backdrop-filter: blur(16px) saturate(120%);
-  }
-
-  .glass-elevated {
-    -webkit-backdrop-filter: blur(12px) saturate(120%);
-    backdrop-filter: blur(12px) saturate(120%);
-  }
-
-  .glass {
-    -webkit-backdrop-filter: blur(12px) saturate(120%);
-    backdrop-filter: blur(12px) saturate(120%);
-  }
-
-  /* Disable backdrop-filter on high-frequency elements to reduce GPU overdraw.
-     Pills and reactions appear 10+ times per post × 150 posts = 1500+ blurred layers. */
-  .pill,
-  .reaction-pill {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+    background: var(--color-bg);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), inset 0 1px 0 var(--glass-highlight);
+  }
+
+  .dark .floating-glass {
+    background: var(--color-bg-secondary);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), inset 0 1px 0 var(--glass-highlight);
+  }
+
+  .glass-elevated,
+  .glass {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--color-bg);
+  }
+
+  .dark .glass-elevated,
+  .dark .glass {
+    background: var(--color-bg-secondary);
+  }
+
+  .pill,
+  .reaction-pill,
+  .glass-btn,
+  .new-posts-btn {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--color-bg-secondary);
+  }
+
+  .dark .new-posts-btn {
     background: var(--color-bg-secondary);
   }
 }

@@ -1,9 +1,11 @@
-import { For, Show, createMemo, onCleanup, onMount } from 'solid-js'
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from 'solid-js'
+import { Portal } from 'solid-js/web'
 import { TimelinePost } from './TimelinePost'
 import { TimelineGroup } from './TimelineGroup'
 import { PostSkeleton } from '@/components/ui'
-import { INFINITE_SCROLL_THRESHOLD, TIMING } from '@/config/constants'
-import { Newspaper } from 'lucide-solid'
+import { INFINITE_SCROLL_THRESHOLD, TIMING, isMobile } from '@/config/constants'
+import { haptic } from '@/lib/utils'
+import { Newspaper, ChevronUp } from 'lucide-solid'
 import type { Channel } from '@/lib/telegram'
 import type { Message } from '@/lib/telegram'
 import type { TimelineItem } from '@/lib/utils'
@@ -25,6 +27,8 @@ interface TimelineProps {
   scrollKey?: string
   /** Pre-computed channel map — avoids recreating from channels array */
   channelMap?: Map<number, Channel>
+  /** Pull-to-refresh callback — return promise to keep spinner until complete */
+  onRefresh?: () => Promise<unknown> | void
 }
 
 /**
@@ -128,13 +132,28 @@ export function Timeline(props: TimelineProps) {
   let containerRef: HTMLDivElement | undefined
   let scrollParent: HTMLElement | null = null
   let loadMoreRef: HTMLDivElement | undefined
+  let topSentinelRef: HTMLDivElement | undefined
   let loadMoreObserver: IntersectionObserver | null = null
+  let topObserver: IntersectionObserver | null = null
   let restoreTimer: ReturnType<typeof setTimeout> | null = null
   let rafId: number | null = null
 
   // Flag to prevent scroll restoration after user has scrolled
   let hasUserScrolled = false
   let scrollRestored = false
+
+  // Scroll-to-top button (uses IntersectionObserver — no scroll event overhead)
+  const [showScrollTop, setShowScrollTop] = createSignal(false)
+
+  // Pull-to-refresh state (mobile only)
+  const [pullDistance, setPullDistance] = createSignal(0)
+  const [isRefreshing, setIsRefreshing] = createSignal(false)
+  let pullStartY = 0
+  let pullActive = false
+  let pullStarted = false
+  const PULL_THRESHOLD = 64
+  const MAX_PULL = 128
+  const PULL_RESISTANCE = 0.4
 
   // Channel lookup — use pre-computed map if provided, otherwise build from array
   const channelMap = props.channelMap
@@ -193,6 +212,73 @@ export function Timeline(props: TimelineProps) {
     hasUserScrolled = true
   }
 
+  // Setup IntersectionObserver for scroll-to-top button
+  const setupScrollTopObserver = () => {
+    if (!topSentinelRef || !scrollParent) return
+    topObserver = new IntersectionObserver(
+      ([entry]) => setShowScrollTop(!entry.isIntersecting),
+      { root: scrollParent, rootMargin: '200px', threshold: 0 }
+    )
+    topObserver.observe(topSentinelRef)
+  }
+
+  // Setup pull-to-refresh (touch devices only)
+  const setupPullToRefresh = () => {
+    if (!isMobile || !scrollParent || !props.onRefresh) return
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (scrollParent!.scrollTop > 0 || isRefreshing()) return
+      pullStartY = e.touches[0].clientY
+      pullStarted = true
+      pullActive = false
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!pullStarted || isRefreshing() || !scrollParent) return
+      const delta = e.touches[0].clientY - pullStartY
+      if (delta <= 0 || scrollParent.scrollTop > 0) {
+        pullActive = false
+        if (pullDistance() > 0) setPullDistance(0)
+        return
+      }
+      pullActive = true
+      const dist = Math.min(delta * PULL_RESISTANCE, MAX_PULL)
+      // Haptic at threshold crossing
+      if (dist >= PULL_THRESHOLD && pullDistance() < PULL_THRESHOLD) {
+        haptic('light')
+      }
+      setPullDistance(dist)
+    }
+
+    const onTouchEnd = () => {
+      if (!pullActive) { pullStarted = false; return }
+      pullStarted = false
+      pullActive = false
+      if (pullDistance() >= PULL_THRESHOLD && props.onRefresh) {
+        setIsRefreshing(true)
+        haptic('medium')
+        Promise.resolve(props.onRefresh())
+          .catch(() => {})
+          .finally(() => {
+            setIsRefreshing(false)
+            setPullDistance(0)
+          })
+      } else {
+        setPullDistance(0)
+      }
+    }
+
+    scrollParent.addEventListener('touchstart', onTouchStart, { passive: true })
+    scrollParent.addEventListener('touchmove', onTouchMove, { passive: true })
+    scrollParent.addEventListener('touchend', onTouchEnd, { passive: true })
+
+    onCleanup(() => {
+      scrollParent?.removeEventListener('touchstart', onTouchStart)
+      scrollParent?.removeEventListener('touchmove', onTouchMove)
+      scrollParent?.removeEventListener('touchend', onTouchEnd)
+    })
+  }
+
   // Setup IntersectionObserver for infinite scroll
   const setupLoadMoreObserver = () => {
     if (!loadMoreRef) return
@@ -223,7 +309,11 @@ export function Timeline(props: TimelineProps) {
       restoreTimer = setTimeout(restoreScrollPosition, TIMING.SCROLL_RESTORE_DELAY)
     }
 
-    queueMicrotask(setupLoadMoreObserver)
+    queueMicrotask(() => {
+      setupLoadMoreObserver()
+      setupScrollTopObserver()
+      setupPullToRefresh()
+    })
   })
 
   // Cleanup on unmount
@@ -243,6 +333,11 @@ export function Timeline(props: TimelineProps) {
       loadMoreObserver = null
     }
 
+    if (topObserver) {
+      topObserver.disconnect()
+      topObserver = null
+    }
+
     if (restoreTimer) {
       clearTimeout(restoreTimer)
       restoreTimer = null
@@ -259,6 +354,25 @@ export function Timeline(props: TimelineProps) {
 
   return (
     <div ref={containerRef} class="min-h-full pb-24">
+      {/* Pull-to-refresh indicator */}
+      <Show when={pullDistance() > 0 || isRefreshing()}>
+        <div
+          class="flex justify-center items-center overflow-hidden"
+          style={{ height: `${isRefreshing() ? PULL_THRESHOLD : pullDistance()}px` }}
+        >
+          <div
+            class={`w-5 h-5 rounded-full border-2 border-[var(--accent)] ${isRefreshing() ? 'animate-spin border-t-transparent' : ''}`}
+            style={{
+              opacity: Math.min(pullDistance() / PULL_THRESHOLD, 1),
+              transform: isRefreshing() ? '' : `rotate(${pullDistance() * 4}deg)`,
+            }}
+          />
+        </div>
+      </Show>
+
+      {/* Scroll-to-top sentinel */}
+      <div ref={topSentinelRef} class="h-px" aria-hidden="true" />
+
       {/* Empty state */}
       <Show when={isEmpty()}>
         <div class="flex flex-col items-center justify-center h-64 text-center px-4">
@@ -316,6 +430,25 @@ export function Timeline(props: TimelineProps) {
       <Show when={!props.hasMore && !props.isLoadingMore && (props.items ?? []).length > 0}>
         <div class="text-center py-8 text-sm text-tertiary">You've reached the end</div>
       </Show>
+
+      {/* Scroll to top — Portal escapes PageTransition's containing block */}
+      <Portal>
+        <button
+          type="button"
+          class="fixed z-40 w-10 h-10 rounded-full flex items-center justify-center bg-[var(--color-bg)] border border-[var(--nav-border)] text-[var(--color-text-secondary)] active:scale-95 bottom-24 right-4 lg:bottom-6 lg:right-6 transition-opacity duration-200"
+          classList={{
+            'opacity-100 pointer-events-auto shadow-md': showScrollTop(),
+            'opacity-0 pointer-events-none': !showScrollTop(),
+          }}
+          onClick={() => {
+            haptic('light')
+            scrollParent?.scrollTo({ top: 0, behavior: 'smooth' })
+          }}
+          aria-label="Scroll to top"
+        >
+          <ChevronUp size={20} />
+        </button>
+      </Portal>
     </div>
   )
 }

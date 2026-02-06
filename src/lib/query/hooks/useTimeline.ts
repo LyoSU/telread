@@ -538,9 +538,7 @@ export function useOptimizedTimeline() {
         historyQuery.fetchNextPage()
       }
     },
-    refresh: () => {
-      initialQuery.refetch()
-    },
+    refresh: () => initialQuery.refetch(),
     retry: () => {
       if (initialQuery.isError) {
         initialQuery.refetch()

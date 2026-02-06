@@ -8,8 +8,8 @@ export const queryClient = new QueryClient({
     queries: {
       // Cache for 5 minutes before considering stale
       staleTime: 1000 * 60 * 5,
-      // Keep in cache for 5-10 minutes - aggressively clean up to save memory
-      gcTime: isMobile ? 1000 * 60 * 5 : 1000 * 60 * 10,
+      // Keep in cache for 10-15 minutes - balance memory vs re-download cost
+      gcTime: isMobile ? 1000 * 60 * 10 : 1000 * 60 * 15,
       // Retry failed requests - reduce on mobile to save bandwidth
       retry: isMobile ? 1 : 2,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
