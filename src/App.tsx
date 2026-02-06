@@ -12,6 +12,9 @@ import { MainLayout } from '@/layouts'
 import { FullPageError, UpdatePrompt } from '@/components/ui'
 import { MessageCircle } from 'lucide-solid'
 
+declare const __BUILD_TIME__: string
+console.log(`[TelRead] Build: ${__BUILD_TIME__}`)
+
 // Import most-used pages directly, lazy load the rest
 import Home from '@/pages/Home'
 import Post from '@/pages/Post'

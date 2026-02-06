@@ -30,12 +30,11 @@ export function MainLayout(props: ParentProps) {
   /** Navigate to home or handle home-tap if already there */
   const handleHomeTap = () => {
     haptic('light')
-    // Use window.location for reliability (router location can lag)
     if (window.location.pathname === '/') {
-      // Scroll to top
+      // Scroll to top instantly
       const scrollEl = mainRef ?? document.querySelector('.main-scroll-container') as HTMLElement | null
-      scrollEl?.scrollTo({ top: 0, behavior: 'smooth' })
-      // Signal Home.tsx to refresh via reactive store (not DOM events)
+      if (scrollEl) scrollEl.scrollTop = 0
+      // Signal Home.tsx to refresh
       triggerHomeTap()
     } else {
       navigate('/')
