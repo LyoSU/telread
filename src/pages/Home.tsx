@@ -1,6 +1,7 @@
-import { onMount, onCleanup, createMemo, createEffect, For, Show, createSignal } from 'solid-js'
+import { onCleanup, createMemo, createEffect, on, For, Show, createSignal } from 'solid-js'
 import { Timeline } from '@/components/timeline'
 import { useOptimizedTimeline } from '@/lib/query/hooks/useTimeline'
+import { homeTapTrigger } from '@/lib/store/navigation'
 import { useFolderInfoList } from '@/lib/query/hooks/useFolders'
 import { FolderChip } from '@/components/ui'
 import { folderStore, setSelectedFolder } from '@/lib/store/folders'
@@ -75,24 +76,20 @@ function Home() {
         }
     })
 
-    // Listen for home tap when already at top
-    onMount(() => {
-        const handleHomeTap = async () => {
-            if (timeline.pendingCount > 0) {
-                timeline.showNewPosts()
-                return
-            }
-            // Show refresh spinner, then refresh
-            setIsRefreshing(true)
-            try {
-                await timeline.refresh()
-            } finally {
-                setIsRefreshing(false)
-            }
+    // React to home button tap via reactive signal (no DOM events)
+    createEffect(on(homeTapTrigger, async () => {
+        if (timeline.pendingCount > 0) {
+            timeline.showNewPosts()
+            return
         }
-        window.addEventListener('home-tap-top', handleHomeTap)
-        onCleanup(() => window.removeEventListener('home-tap-top', handleHomeTap))
-    })
+        // Show refresh spinner, then refresh
+        setIsRefreshing(true)
+        try {
+            await timeline.refresh()
+        } finally {
+            setIsRefreshing(false)
+        }
+    }, { defer: true }))
 
     // Cleanup abort controller on unmount
     onCleanup(() => {

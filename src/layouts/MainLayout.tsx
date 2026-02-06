@@ -1,6 +1,7 @@
 import { type ParentProps, type JSX, Show } from 'solid-js'
 import { A, useLocation, useNavigate } from '@solidjs/router'
 import { authStore, updateStore } from '@/lib/store'
+import { triggerHomeTap } from '@/lib/store/navigation'
 import { haptic } from '@/lib/utils'
 import { UserAvatar, PageTransition } from '@/components/ui'
 import { Home, Search, Bookmark, User, MessageCircle } from 'lucide-solid'
@@ -26,23 +27,16 @@ export function MainLayout(props: ParentProps) {
   const navigate = useNavigate()
   let mainRef: HTMLElement | undefined
 
-  const handleHomeClick = () => {
-    haptic('light')
-    // Find the actual scroll container robustly
-    const scrollEl = mainRef ?? document.querySelector('.main-scroll-container') as HTMLElement | null
-    if (scrollEl && scrollEl.scrollTop > 0) {
-      scrollEl.scrollTo({ top: 0, behavior: 'smooth' })
-    } else {
-      // At top or no scroll — trigger refresh
-      window.dispatchEvent(new CustomEvent('home-tap-top'))
-    }
-  }
-
   /** Navigate to home or handle home-tap if already there */
   const handleHomeTap = () => {
     haptic('light')
-    if (location.pathname === '/') {
-      handleHomeClick()
+    // Use window.location for reliability (router location can lag)
+    if (window.location.pathname === '/') {
+      // Scroll to top
+      const scrollEl = mainRef ?? document.querySelector('.main-scroll-container') as HTMLElement | null
+      scrollEl?.scrollTo({ top: 0, behavior: 'smooth' })
+      // Signal Home.tsx to refresh via reactive store (not DOM events)
+      triggerHomeTap()
     } else {
       navigate('/')
     }
@@ -105,14 +99,14 @@ export function MainLayout(props: ParentProps) {
           {navItems.map((item) => {
             const active = () => isActive(item.path)
 
-            // Home button: always <button> to avoid router click interception
+            // Home button: <button> with on:click (direct binding, not delegated)
             if (item.path === '/') {
               return (
                 <button
                   type="button"
                   class={`threads-nav-item ${active() ? 'threads-nav-item-active' : ''}`}
                   title={item.label}
-                  onClick={handleHomeTap}
+                  on:click={handleHomeTap}
                 >
                   {item.icon(active())}
                 </button>
@@ -163,7 +157,7 @@ export function MainLayout(props: ParentProps) {
           <button
             type="button"
             class={`nav-item ${isActive('/') ? 'nav-item-active' : ''}`}
-            onClick={handleHomeTap}
+            on:click={handleHomeTap}
           >
             <Home size={28} stroke-width={isActive('/') ? 2.5 : 1.5} />
           </button>
