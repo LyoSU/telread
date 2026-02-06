@@ -31,10 +31,6 @@ const openChannels = new Set<number>()
  */
 const pendingOpens = new Set<number>()
 
-/**
- * Whether the open chats system is active
- */
-let isActive = false
 
 /**
  * Open a channel to receive real-time updates
@@ -139,7 +135,6 @@ export async function closeAllChannels(): Promise<void> {
   await Promise.allSettled(channelsToClose.map(closeChannel))
   
   openChannels.clear()
-  isActive = false
 }
 
 /**
@@ -159,8 +154,6 @@ export async function updateOpenChannels(
     }
     return
   }
-
-  isActive = true
 
   // Sort by last message date (most recent first) and take top N
   const sortedChannels = [...channels]

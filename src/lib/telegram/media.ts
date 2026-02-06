@@ -429,12 +429,14 @@ function debugWarn(message: string, ...args: unknown[]) {
 /**
  * Extract downloadable media from a message, handling webpage preview photos
  */
-function extractMediaFromMessage(msg: { media: { type: string } & Record<string, unknown> }): MediaWithThumbnails | null {
-  if (msg.media.type === 'webpage') {
-    const photo = (msg.media as WebPageMedia).preview.photo
+function extractMediaFromMessage(msg: { media: unknown }): MediaWithThumbnails | null {
+  const media = msg.media as { type: string } | null
+  if (!media) return null
+  if (media.type === 'webpage') {
+    const photo = (media as unknown as WebPageMedia).preview.photo
     return photo ?? null
   }
-  return msg.media as MediaWithThumbnails
+  return media as unknown as MediaWithThumbnails
 }
 
 /**

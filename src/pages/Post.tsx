@@ -24,11 +24,11 @@ function Post() {
   const navigate = useNavigate()
 
   const parsedChannelId = () => {
-    const n = parseInt(params.channelId, 10)
+    const n = parseInt(params.channelId ?? '', 10)
     return Number.isFinite(n) ? n : 0
   }
   const parsedMessageId = () => {
-    const n = parseInt(params.messageId, 10)
+    const n = parseInt(params.messageId ?? '', 10)
     return Number.isFinite(n) ? n : 0
   }
 
